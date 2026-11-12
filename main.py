@@ -851,39 +851,44 @@ async def handler(m: Message):
             if cmd == "-логчат":
                 cursor.execute("DELETE FROM bot_config WHERE key = 'log_chat'")
             else:
-cursor.execute("INSERT OR REPLACE INTO bot_config VALUES ('log_chat', ?)", (str(cid),))
-conn.commit()
-return await m.answer("📜 Чат логов обновлён.")
-if cmd in ["+чсбота", "-чсбота"]:
-tid = get_target(m, args)
-if not tid or tid == OWNER_ID:
-return await m.answer("⚠️ Укажите игрока.")
-if cmd == "-чсбота":
-cursor.execute("DELETE FROM bot_blacklist WHERE user_id = ?", (tid,))
-else:
-cursor.execute("INSERT OR REPLACE INTO bot_blacklist VALUES (?, ?)", (tid, "ЧС бота"))
-conn.commit()
-return await m.answer(f"🚫 ЧС бота обновлён для [id{tid}|игрока].")
-txt = " ".join(args[1:])
-if not txt:
-return await m.answer("⚠️ Введите текст.")
-if cmd == "+приветствие":
-cursor.execute("UPDATE chat_settings SET welcome_text = ? WHERE chat_id = ?", (txt, cid))
-conn.commit()
-await m.answer("✅ Приветствие обновлено.")
-elif cmd == "+устправила":
-cursor.execute("UPDATE chat_settings SET rules_text = ? WHERE chat_id = ?", (txt, cid))
-conn.commit()
-await m.answer("✅ Правила обновлены.")
-elif cmd == "+рассылка":
-cursor.execute("SELECT chat_id FROM known_chats")
-chats = cursor.fetchall()
-s = 0
-for (pid,) in chats:
-try:
-await bot.api.messages.send(peer_id=pid, message=f"📣 ОБЪЯВЛЕНИЕ\n━━━━━━━━━━━━━━━━━━\n{txt}", random_id=0)
-s += 1
-except Exception:
-pass
-await m.answer(f"✅ Отправлено в {s} из {len(chats)} чатов.")
+        if cmd in ["+логчат", "-логчат"]:
+            if cmd == "-логчат":
+                cursor.execute("DELETE FROM bot_config WHERE key = 'log_chat'")
+            else:
+                cursor.execute("INSERT OR REPLACE INTO bot_config VALUES ('log_chat', ?)", (str(cid),))
+            conn.commit()
+            return await m.answer("📜 Чат логов обновлён.")
+        if cmd in ["+чсбота", "-чсбота"]:
+            tid = get_target(m, args)
+            if not tid or tid == OWNER_ID:
+                return await m.answer("⚠️ Укажите игрока.")
+            if cmd == "-чсбота":
+                cursor.execute("DELETE FROM bot_blacklist WHERE user_id = ?", (tid,))
+            else:
+                cursor.execute("INSERT OR REPLACE INTO bot_blacklist VALUES (?, ?)", (tid, "ЧС бота"))
+            conn.commit()
+            return await m.answer(f"🚫 ЧС бота обновлён для [id{tid}|игрока].")
+        txt = " ".join(args[1:])
+        if not txt:
+            return await m.answer("⚠️ Введите текст.")
+        if cmd == "+приветствие":
+            cursor.execute("UPDATE chat_settings SET welcome_text = ? WHERE chat_id = ?", (txt, cid))
+            conn.commit()
+            await m.answer("✅ Приветствие обновлено.")
+        elif cmd == "+устправила":
+            cursor.execute("UPDATE chat_settings SET rules_text = ? WHERE chat_id = ?", (txt, cid))
+            conn.commit()
+            await m.answer("✅ Правила обновлены.")
+        elif cmd == "+рассылка":
+            cursor.execute("SELECT chat_id FROM known_chats")
+            chats = cursor.fetchall()
+            s = 0
+            for (pid,) in chats:
+                try:
+                    await bot.api.messages.send(peer_id=pid, message=f"📣 ОБЪЯВЛЕНИЕ\n━━━━━━━━━━━━━━━━━━\n{txt}", random_id=0)
+                    s += 1
+                except Exception:
+                    pass
+            await m.answer(f"✅ Отправлено в **{s}** из {len(chats)} чатов.")
+
 bot.run()
