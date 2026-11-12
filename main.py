@@ -847,10 +847,7 @@ async def handler(m: Message):
             cursor.execute("UPDATE users SET msgs = 0 WHERE chat_id = ?", (cid,))
             conn.commit()
             return await m.answer("🔄 Счётчики сообщений в чате обнулены.")
-        if cmd in ["+логчат", "-логчат"]:
-            if cmd == "-логчат":
-                cursor.execute("DELETE FROM bot_config WHERE key = 'log_chat'")
-            else:
+        
         if cmd in ["+логчат", "-логчат"]:
             if cmd == "-логчат":
                 cursor.execute("DELETE FROM bot_config WHERE key = 'log_chat'")
