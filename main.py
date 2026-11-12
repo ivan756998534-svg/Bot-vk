@@ -65,18 +65,18 @@ LINK_PATTERN = re.compile(
 )
 
 HELP_DICT = {
-    "стата": "📊 +стата [@игрок]\nПоказывает профиль игрока: ник, должность, сообщения, репутацию и наказания.",
-    "ник": "🏷 +ник [@игрок] [Ник]\nУстанавливает игровой ник участнику в текущей беседе.\nПример: +ник @durov Ivan_Ivanov",
-    "гник": "🌐 +гник [@игрок] [Ник]\nУстанавливает игровой ник участнику сразу во всех беседах бота.\nСнять: -гник @игрок",
-    "чекбан": "🔍 +чекбан [@игрок]\nПроверяет, находится ли игрок в локальном или глобальном бане.",
-    "мут": "🔇 +мут [@игрок] [срок] [причина]\nПримеры: +мут @durov 30 Флуд | +мут @durov 2ч Спам\nСнять мут: -мут @игрок",
-    "пред": "⚠️ +пред [@игрок] [причина]\nВыдаёт устное предупреждение (2 преда = 1 выговор).\nСнять пред: -пред @игрок",
-    "выг": "📛 +выг [@игрок] [причина]\nВыдаёт строгий выговор (3 выговора = автокик).\nСнять выговор: -выг @игрок",
-    "кик": "👢 +кик [@игрок] [причина]\nИсключает участника из текущей беседы.",
-    "бан": "⛔ +бан [@игрок] [срок] [причина]\nНа время: +бан @durov 7д Слив (м/ч/д)\nНавсегда: +бан @durov Реклама\nРазбанить: -бан @игрок",
-    "гбан": "🌐 +гбан [@игрок] [срок] [причина]\nГлобальный бан во всех чатах (на время или навсегда).\nРазбанить: -гбан @игрок",
-    "чсбота": "🚫 +чсбота [@игрок]\nЗапрещает игроку пользоваться командами бота во всех беседах.\nУбрать из ЧС: -чсбота @игрок",
-    "новыйгод": "🎄 +новыйгод (или +нг)\nПоказывает точный отсчёт дней, часов и минут до Нового года."
+    "стата": "📊 +стата [@игрок]\n│ Показывает профиль игрока: ник, должность, актив и наказания.",
+    "ник": "🏷 +ник [@игрок] [Ник]\n│ Устанавливает игровой ник участнику в текущей беседе.\n│ Пример: +ник @durov Ivan_Ivanov",
+    "гник": "🌐 +гник [@игрок] [Ник]\n│ Устанавливает игровой ник участнику сразу во всех беседах.\n│ Снять во всех чатах: -гник @игрок",
+    "чекбан": "🔍 +чекбан [@игрок]\n│ Проверяет локальный бан, глобальный бан, мут и ЧС бота у игрока.",
+    "мут": "🔇 +мут [@игрок] [срок] [причина]\n│ Примеры: +мут @durov 30 Флуд | +мут @durov 2ч Спам\n│ Снять мут: -мут @игрок",
+    "пред": "⚠️ +пред [@игрок] [причина]\n│ Выдаёт устное предупреждение (2 преда = 1 выговор).\n│ Снять пред: -пред @игрок",
+    "выг": "📛 +выг [@игрок] [причина]\n│ Выдаёт строгий выговор (3 выговора = автокик).\n│ Снять выговор: -выг @игрок",
+    "кик": "👢 +кик [@игрок] [причина]\n│ Исключает участника из текущей беседы.",
+    "бан": "⛔ +бан [@игрок] [срок] [причина]\n│ На время: +бан @durov 7д Слив (м/ч/д)\n│ Навсегда: +бан @durov Реклама\n│ Разбанить: -бан @игрок",
+    "гбан": "🌐 +гбан [@игрок] [срок] [причина]\n│ Глобальный бан во всех чатах (на время или навсегда).\n│ Разбанить: -гбан @игрок",
+    "чсбота": "🚫 +чсбота [@игрок]\n│ Запрещает игроку пользоваться командами бота во всех беседах.\n│ Убрать из ЧС: -чсбота @игрок",
+    "новыйгод": "🎄 +новыйгод (или +нг)\n│ Показывает точный отсчёт дней, часов и минут до Нового года."
 }
 
 def parse_duration(token: str):
@@ -178,7 +178,7 @@ async def send_log(text: str):
         try:
             await bot.api.messages.send(
                 peer_id=int(r[0]),
-                message=f"📜 ЖУРНАЛ ДЕЙСТВИЙ\n━━━━━━━━━━━━━━\n{text}",
+                message=f"╭─ 📜 ЖУРНАЛ ДЕЙСТВИЙ\n│ {text}\n╰────────────",
                 random_id=0
             )
         except Exception:
@@ -281,10 +281,10 @@ async def handler(m: Message):
                     try:
                         await bot.api.messages.remove_chat_user(chat_id=m.chat_id, member_id=uid)
                         await m.answer(
-                            f"🚪 АВТОКИК ВЫШЕДШЕГО\n"
-                            f"━━━━━━━━━━━━━━\n"
-                            f"👤 Участник: [id{uid}|игрок]\n"
-                            f"📌 Действие: Покинул беседу и был исключён."
+                            f"╭─ 🚪 АВТОКИК ВЫШЕДШЕГО\n"
+                            f"│ 👤 Участник: [id{uid}|игрок]\n"
+                            f"│ 📌 Статус: Покинул беседу и исключён\n"
+                            f"╰────────────"
                         )
                         await send_log(f"🚪 Автокик вышедшего: [id{uid}|игрок] (чат {cid}).")
                     except Exception:
@@ -305,11 +305,11 @@ async def handler(m: Message):
                 ban = check_ban(cid, uid)
                 if ban:
                     await m.answer(
-                        f"⛔ ДОСТУП ЗАКРЫТ\n"
-                        f"━━━━━━━━━━━━━━\n"
-                        f"👤 Игрок: [id{uid}|участник]\n"
-                        f"📌 Статус: {ban[0]} ({ban[2]})\n"
-                        f"💬 Причина: {ban[1]}"
+                        f"╭─ ⛔ ДОСТУП ЗАКРЫТ\n"
+                        f"│ 👤 Игрок: [id{uid}|участник]\n"
+                        f"│ 📌 Статус: {ban[0]} ({ban[2]})\n"
+                        f"│ 💬 Причина: {ban[1]}\n"
+                        f"╰────────────"
                     )
                     try:
                         await bot.api.messages.remove_chat_user(chat_id=m.chat_id, member_id=uid)
@@ -318,11 +318,12 @@ async def handler(m: Message):
                     return
                 get_user(cid, uid)
                 await m.answer(
-                    f"👋 ДОБРО ПОЖАЛОВАТЬ\n"
-                    f"━━━━━━━━━━━━━━\n"
-                    f"Приветствуем, [id{uid}|игрок]!\n"
-                    f"💬 {w_text}\n\n"
-                    f"💡 Напиши «+помощь», чтобы открыть список команд."
+                    f"╭─ 👋 ДОБРО ПОЖАЛОВАТЬ\n"
+                    f"│ Приветствуем, [id{uid}|игрок]!\n"
+                    f"│ 💬 {w_text}\n"
+                    f"│\n"
+                    f"│ 💡 Напиши «+помощь» для списка команд\n"
+                    f"╰────────────"
                 )
             return
     if not m.text or m.from_id < 0:
@@ -388,69 +389,72 @@ async def handler(m: Message):
     if cmd in ["/help", "!помощь", "/помощь", "+помощь", "+команды"]:
         sub = args[1].lower().lstrip("+/-!") if len(args) > 1 else ""
         if sub in HELP_DICT:
-            return await m.answer(f"📖 СПРАВКА ПО КОМАНДЕ\n━━━━━━━━━━━━━━\n{HELP_DICT[sub]}")
+            return await m.answer(f"╭─ 📖 СПРАВКА ПО КОМАНДЕ\n│ {HELP_DICT[sub]}\n╰────────────")
         if sub == "игрок":
             return await m.answer(
-                "👤 КОМАНДЫ ИГРОКОВ [0+ УР.]\n"
-                "━━━━━━━━━━━━━━\n"
-                "▸ +стата [@игрок] — профиль и статистика\n"
-                "▸ +новыйгод (+нг) — дней до Нового года\n"
-                "▸ +топ — топ активных участников\n"
-                "▸ +реп / -реп [@игрок] — репутация\n"
-                "▸ +ники / +состав / +гсостав — списки\n"
-                "▸ +онлайн / +правила / +пинг — инфо\n\n"
-                "💡 Подробнее: +помощь [команда]"
+                "╭─ 👤 КОМАНДЫ ИГРОКОВ [0+ УР.]\n"
+                "│ ▸ +стата [@игрок] — профиль и статистика\n"
+                "│ ▸ +новыйгод (+нг) — дней до Нового года\n"
+                "│ ▸ +топ — топ активных участников\n"
+                "│ ▸ +реп / -реп [@игрок] — репутация\n"
+                "│ ▸ +ники / +состав / +гсостав — списки\n"
+                "│ ▸ +онлайн / +правила / +пинг — инфо\n"
+                "│\n"
+                "│ 💡 Подробнее: +помощь [команда]\n"
+                "╰────────────"
             )
         if sub == "модер":
             return await m.answer(
-                "🛡 МОДЕРАЦИЯ [1+ УР.]\n"
-                "━━━━━━━━━━━━━━\n"
-                "▸ +ник [@игрок] [Ник] — поставить ник\n"
-                "▸ +снятьник [@игрок] — сбросить ник\n"
-                "▸ +найтиник [часть] — поиск по никам\n"
-                "▸ +чекбан [@игрок] — проверить бан игрока\n"
-                "▸ +мут [@игрок] [срок] [причина] — мут (30м/2ч/1д)\n"
-                "▸ -мут [@игрок] — снять мут / +мутлист\n"
-                "▸ +пред / -пред [@игрок] — пред (2=выг)\n"
-                "▸ +преды / +выги — список нарушителей\n"
-                "▸ +заметка [@игрок] [текст] / +заметки"
+                "╭─ 🛡 МОДЕРАЦИЯ [1+ УР.]\n"
+                "│ ▸ +ник [@игрок] [Ник] — поставить ник\n"
+                "│ ▸ +снятьник [@игрок] — сбросить ник\n"
+                "│ ▸ +найтиник [часть] — поиск по никам\n"
+                "│ ▸ +чекбан [@игрок] — проверить бан игрока\n"
+                "│ ▸ +мут [@игрок] [срок] [причина] — мут (30м/2ч/1д)\n"
+                "│ ▸ -мут [@игрок] — снять мут / +мутлист\n"
+                "│ ▸ +пред / -пред [@игрок] — пред (2=выг)\n"
+                "│ ▸ +преды / +выги — список нарушителей\n"
+                "│ ▸ +заметка [@игрок] [текст] / +заметки\n"
+                "╰────────────"
             )
         if sub == "админ":
             return await m.answer(
-                "⚔️ АДМИНИСТРИРОВАНИЕ [2+ УР.]\n"
-                "━━━━━━━━━━━━━━\n"
-                "▸ +выг / -выг [@игрок] [причина] — выговор\n"
-                "▸ +кик [@игрок] [причина] — исключить\n"
-                "▸ +бан [@игрок] [срок] [причина] — временный/вечный бан\n"
-                "▸ -бан [@игрок] — разбанить / +баны — список\n"
-                "▸ +тишина / +антикапс / +антифлуд\n"
-                "▸ +антиссылка / +автоочистка — режимы\n"
-                "▸ +созыв [текст] / +очистить / +инфочат"
+                "╭─ ⚔️ АДМИНИСТРИРОВАНИЕ [2+ УР.]\n"
+                "│ ▸ +выг / -выг [@игрок] [причина] — выговор\n"
+                "│ ▸ +кик [@игрок] [причина] — исключить\n"
+                "│ ▸ +бан [@игрок] [срок] [причина] — бан чата\n"
+                "│ ▸ -бан [@игрок] — разбанить / +баны — список\n"
+                "│ ▸ +тишина / +антикапс / +антифлуд\n"
+                "│ ▸ +антиссылка / +автоочистка — режимы\n"
+                "│ ▸ +созыв [текст] / +очистить / +инфочат\n"
+                "╰────────────"
             )
         if sub in ["га", "руководство", "старшие"]:
             return await m.answer(
-                "👑 РУКОВОДСТВО И РАНГИ [3-4 УР.]\n"
-                "━━━━━━━━━━━━━━\n"
-                "▸ +гник / -гник [@игрок] [Ник] — ник во всех чатах\n"
-                "▸ +гбан [@игрок] [срок] [причина] — глобал бан\n"
-                "▸ -гбан [@игрок] / +гкик / +гбаны / +чаты\n"
-                "▸ +снятьвсе [@игрок] — снять наказания\n"
-                "▸ +кикмолчунов — кик тех, у кого 0 сообщ.\n"
-                "▸ +приветствие / +устправила [текст]\n"
-                "▸ +сбросстатистики — обнулить счётчик\n"
-                "▸ Ранги: +модер, +админ, +га, +зга, +спец, +снять\n"
-                "▸ Глобал: +гмодер, +гадмин, +гга, +гспец, +гснять\n"
-                "▸ [4 ур.]: +логчат, -логчат, +чсбота, -чсбота, +рассылка"
+                "╭─ 👑 РУКОВОДСТВО И РАНГИ [3-4 УР.]\n"
+                "│ ▸ +гник / -гник [@игрок] [Ник] — ник во всех чатах\n"
+                "│ ▸ +гбан [@игрок] [срок] [причина] — глобал бан\n"
+                "│ ▸ -гбан [@игрок] / +гкик / +гбаны / +чаты\n"
+                "│ ▸ +снятьвсе [@игрок] — снять наказания\n"
+                "│ ▸ +кикмолчунов — кик тех, у кого 0 сообщ.\n"
+                "│ ▸ +приветствие / +устправила [текст]\n"
+                "│ ▸ +сбросстатистики — обнулить счётчик\n"
+                "│ ▸ Ранги: +модер, +админ, +га, +зга, +спец, +снять\n"
+                "│ ▸ Глобал: +гмодер, +гадмин, +гга, +гспец, +гснять\n"
+                "│ ▸ [4 ур.]: +логчат, -логчат, +чсбота, -чсбота, +рассылка\n"
+                "╰────────────"
             )
         return await m.answer(
-            "📋 СПРАВОЧНИК КОМАНД\n"
-            "━━━━━━━━━━━━━━\n"
-            "Выберите нужный раздел:\n\n"
-            "👤 +помощь игрок — профиль, Новый год, списки\n"
-            "🛡 +помощь модер — ники, чекбан, муты, преды\n"
-            "⚔️ +помощь админ — выги, баны, защита чата\n"
-            "👑 +помощь га — глобал-ник, глобал-бан, ранги\n\n"
-            "💡 Совет: команду можно писать ответом на сообщение игрока!"
+            "╭─ 📋 СПРАВОЧНИК КОМАНД\n"
+            "│ Выберите нужный раздел:\n"
+            "│\n"
+            "│ 👤 +помощь игрок — профиль, Новый год, списки\n"
+            "│ 🛡 +помощь модер — ники, чекбан, муты, преды\n"
+            "│ ⚔️ +помощь админ — выги, баны, защита чата\n"
+            "│ 👑 +помощь га — глобал-ник, глобал-бан, ранги\n"
+            "│\n"
+            "│ 💡 Команду можно писать ответом на сообщение!\n"
+            "╰────────────"
         )
     elif cmd in ["+новыйгод", "+нг", "/newyear"]:
         now_dt = datetime.now()
@@ -458,19 +462,28 @@ async def handler(m: Message):
         ny_dt = datetime(next_year, 1, 1, 0, 0, 0)
         diff = ny_dt - now_dt
         await m.answer(
-            f"🎄 ДО НОВОГО {next_year} ГОДА\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"📅 Дней: {diff.days}\n"
-            f"⏰ Часов: {diff.seconds // 3600} | Минут: {(diff.seconds % 3600) // 60}"
+            f"╭─ 🎄 ДО НОВОГО {next_year} ГОДА\n"
+            f"│ 📅 Дней: {diff.days}\n"
+            f"│ ⏰ Часов: {diff.seconds // 3600} | Минут: {(diff.seconds % 3600) // 60}\n"
+            f"╰────────────"
         )
 
     elif cmd in ["+пинг", "/ping"]:
         ms = round((time.time() - m.date) * 1000)
         up = int(time.time() - START_TIME) // 60
-        await m.answer(f"🏓 Понг!\n⏱ Отклик: {abs(ms)} мс | Аптайм: {up} мин.")
+        await m.answer(
+            f"╭─ 🏓 СТАТУС БОТА\n"
+            f"│ ⚡ Отклик: {abs(ms)} мс\n"
+            f"│ ⏱ Аптайм: {up} мин.\n"
+            f"╰────────────"
+        )
 
     elif cmd in ["+правила", "/rules"]:
-        await m.answer(f"📖 ПРАВИЛА БЕСЕДЫ\n━━━━━━━━━━━━━━\n{rules_text}")
+        await m.answer(
+            f"╭─ 📖 ПРАВИЛА БЕСЕДЫ\n"
+            f"│ {rules_text}\n"
+            f"╰────────────"
+        )
 
     elif cmd in ["+стата", "+профиль", "/stats", "!стата"]:
         tid = get_target(m, args) or m.from_id
@@ -479,13 +492,13 @@ async def handler(m: Message):
         cursor.execute("SELECT COUNT(*) FROM user_notes WHERE chat_id = ? AND user_id = ?", (cid, tid))
         ncnt = cursor.fetchone()[0]
         await m.answer(
-            f"📊 ПРОФИЛЬ ИГРОКА\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"👤 Игрок: [id{tid}|{tn}]\n"
-            f"🎖 Должность: {tr} ({ta} ур.)\n"
-            f"⭐ Репутация: {trep} | 💬 Сообщений: {tmsgs + (1 if tid == m.from_id else 0)}\n"
-            f"⚠️ Выги: {tw}/3 | Преды: {tp}/2\n"
-            f"🗂 Досье: {ncnt} | 🔇 Мут: {ms_status}"
+            f"╭─ 📊 ПРОФИЛЬ ИГРОКА\n"
+            f"│ 👤 Игрок: [id{tid}|{tn}]\n"
+            f"│ 🎖 Должность: {tr} ({ta} ур.)\n"
+            f"│ ⭐ Репутация: {trep} | 💬 Сообщений: {tmsgs + (1 if tid == m.from_id else 0)}\n"
+            f"│ ⚠️ Выги: {tw}/3 | Преды: {tp}/2\n"
+            f"│ 🗂 Досье: {ncnt} | 🔇 Мут: {ms_status}\n"
+            f"╰────────────"
         )
 
     elif cmd in ["+онлайн", "/online"]:
@@ -495,12 +508,12 @@ async def handler(m: Message):
             for p in mem.profiles:
                 if getattr(p, "online", 0) == 1:
                     dev = "📱" if getattr(p, "online_mobile", 0) == 1 else "💻"
-                    online_list.append(f"{dev} [id{p.id}|{p.first_name} {p.last_name}]")
+                    online_list.append(f"│ {dev} [id{p.id}|{p.first_name} {p.last_name}]")
             if not online_list:
                 return await m.answer("😴 Сейчас никого нет в сети.")
-            await m.answer(f"🟢 В СЕТИ ({len(online_list)})\n━━━━━━━━━━━━━━\n" + "\n".join(online_list[:25]))
+            await m.answer(f"╭─ 🟢 В СЕТИ ({len(online_list)})\n" + "\n".join(online_list[:25]) + "\n╰────────────")
         except Exception:
-            await m.answer("⚠️ Не удалось получить список онлайн (проверьте права администратора у бота).")
+            await m.answer("⚠️ Не удалось получить список онлайн (выдайте боту права администратора).")
 
     elif cmd in ["+реп", "-реп"]:
         tid = get_target(m, args)
@@ -510,16 +523,17 @@ async def handler(m: Message):
         d = 1 if cmd == "+реп" else -1
         cursor.execute("UPDATE users SET rep = rep + ? WHERE chat_id = ? AND user_id = ?", (d, cid, tid))
         conn.commit()
-        await m.answer(f"⭐ Репутация [id{tid}|игрока] изменена! Теперь: {get_user(cid, tid)[7]}")
+        await m.answer(f"⭐ Репутация [id{tid}|игрока] изменена! Текущая: {get_user(cid, tid)[7]}")
 
     elif cmd in ["+топ", "/top", "!топ"]:
         cursor.execute("SELECT user_id, nickname, msgs, rep FROM users WHERE chat_id = ? AND msgs > 0 ORDER BY msgs DESC LIMIT 10", (cid,))
         rows = cursor.fetchall()
         if not rows:
             return await m.answer("📭 Статистика сообщений пока пуста.")
-        lines = ["🏆 ТОП АКТИВНЫХ ИГРОКОВ", "━━━━━━━━━━━━━━"]
+        lines = ["╭─ 🏆 ТОП АКТИВНЫХ ИГРОКОВ"]
         for i, (u, n, c, r) in enumerate(rows, 1):
-            lines.append(f"{i}. [id{u}|{n if n != 'Не установлен' else 'Игрок'}] — {c} сообщ. (⭐{r})")
+            lines.append(f"│ {i}. [id{u}|{n if n != 'Не установлен' else 'Игрок'}] — {c} сообщ. (⭐{r})")
+        lines.append("╰────────────")
         await m.answer("\n".join(lines))
 
     elif cmd in ["+заметка", "+заметки"]:
@@ -539,7 +553,8 @@ async def handler(m: Message):
         rows = cursor.fetchall()
         if not rows:
             return await m.answer("📭 Досье этого игрока пусто.")
-        await m.answer(f"🗂 ДОСЬЕ [id{tid}|ИГРОКА]\n━━━━━━━━━━━━━━\n" + "\n".join([f"▸ {t} (от [id{a}|адм])" for a, t in rows]))
+        body = "\n".join([f"│ ▸ {t} (от [id{a}|адм])" for a, t in rows])
+        await m.answer(f"╭─ 🗂 ДОСЬЕ [id{tid}|ИГРОКА]\n{body}\n╰────────────")
     elif cmd in ["+ники", "/nicks", "!ники", "+найтиник"]:
         if cmd == "+найтиник":
             if acc < 1:
@@ -551,12 +566,14 @@ async def handler(m: Message):
             rows = cursor.fetchall()
             if not rows:
                 return await m.answer("🔍 Совпадений не найдено.")
-            return await m.answer(f"🔍 ПОИСК НИКА: {q}\n━━━━━━━━━━━━━━\n" + "\n".join([f"▸ [id{u}|{n}]" for u, n in rows]))
+            body = "\n".join([f"│ ▸ [id{u}|{n}]" for u, n in rows])
+            return await m.answer(f"╭─ 🔍 ПОИСК НИКА: {q}\n{body}\n╰────────────")
         cursor.execute("SELECT user_id, nickname FROM users WHERE chat_id = ? AND user_id != ? AND nickname != 'Не установлен'", (cid, OWNER_ID))
         rows = cursor.fetchall()
         if not rows:
             return await m.answer("📭 В чате ещё не установлены ники.")
-        await m.answer("📝 СПИСОК НИКОВ ЧАТА\n━━━━━━━━━━━━━━\n" + "\n".join([f"{i}. [id{u}|{n}] — {get_user(cid, u)[1]}" for i, (u, n) in enumerate(rows, 1)]))
+        body = "\n".join([f"│ {i}. [id{u}|{n}] — {get_user(cid, u)[1]}" for i, (u, n) in enumerate(rows, 1)])
+        await m.answer(f"╭─ 📝 СПИСОК НИКОВ ЧАТА\n{body}\n╰────────────")
 
     elif cmd in ["+состав", "+админы", "+модеры", "+гсостав"]:
         if cmd == "+гсостав":
@@ -564,20 +581,21 @@ async def handler(m: Message):
             rows = cursor.fetchall()
             if not rows:
                 return await m.answer("📭 Глобальный состав пуст.")
-            res = ["🌐 ГЛОБАЛЬНЫЙ СОСТАВ\n━━━━━━━━━━━━━━"]
+            res = ["╭─ 🌐 ГЛОБАЛЬНЫЙ СОСТАВ"]
             for u, r, a in rows:
-                res.append(f"🔹 [{a} ур. | {r}] — [id{u}|Админ]")
+                res.append(f"│ 🔹 [{a} ур. | {r}] — [id{u}|Админ]")
+            res.append("╰────────────")
             return await m.answer("\n".join(res))
         cursor.execute("SELECT user_id, nickname FROM users WHERE chat_id = ? AND user_id != ?", (cid, OWNER_ID))
         st = []
         for u, n in cursor.fetchall():
             u_info = get_user(cid, u)
             if u_info[2] >= 1:
-                st.append((u_info[2], f"🔹 [{u_info[2]} ур. | {u_info[1]}] — [id{u}|{n if n != 'Не установлен' else 'Без ника'}]"))
+                st.append((u_info[2], f"│ 🔹 [{u_info[2]} ур. | {u_info[1]}] — [id{u}|{n if n != 'Не установлен' else 'Без ника'}]"))
         if not st:
             return await m.answer("📭 Администрация чата не назначена.")
         st.sort(key=lambda x: x[0], reverse=True)
-        await m.answer("🛡 СОСТАВ ЧАТА\n━━━━━━━━━━━━━━\n" + "\n".join([x[1] for x in st]))
+        await m.answer("╭─ 🛡 СОСТАВ ЧАТА\n" + "\n".join([x[1] for x in st]) + "\n╰────────────")
 
     elif cmd in ["+чекбан", "+банчек", "/checkban"]:
         if acc < 1:
@@ -596,7 +614,7 @@ async def handler(m: Message):
                 cursor.execute("DELETE FROM global_bans WHERE user_id = ?", (tid,))
                 conn.commit()
             else:
-                status_lines.append(f"🌐 Глобальный бан: Активен ({format_left(gb[1], now_ts)})\n💬 Причина: {gb[0]}")
+                status_lines.append(f"│ 🌐 Глобал бан: Активен ({format_left(gb[1], now_ts)})\n│ 💬 Причина: {gb[0]}")
 
         cursor.execute("SELECT reason, ban_until FROM local_bans WHERE chat_id = ? AND user_id = ?", (cid, tid))
         lb = cursor.fetchone()
@@ -605,21 +623,30 @@ async def handler(m: Message):
                 cursor.execute("DELETE FROM local_bans WHERE chat_id = ? AND user_id = ?", (cid, tid))
                 conn.commit()
             else:
-                status_lines.append(f"⛔ Локальный бан: Активен ({format_left(lb[1], now_ts)})\n💬 Причина: {lb[0]}")
+                status_lines.append(f"│ ⛔ Бан чата: Активен ({format_left(lb[1], now_ts)})\n│ 💬 Причина: {lb[0]}")
+
+        cursor.execute("SELECT 1 FROM bot_blacklist WHERE user_id = ?", (tid,))
+        if cursor.fetchone():
+            status_lines.append("│ 🚫 ЧС бота: Активен")
+
+        t_mute = get_user(cid, tid)[5]
+        if t_mute > now_ts:
+            status_lines.append(f"│ 🔇 Мут чата: Активен ({format_left(t_mute, now_ts)})")
 
         if not status_lines:
             return await m.answer(
-                f"🔍 ПРОВЕРКА БЛОКИРОВОК\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"👤 Игрок: [id{tid}|участник]\n"
-                f"✅ Статус: Активных банов нет."
+                f"╭─ 🔍 ПРОВЕРКА ИГРОКА\n"
+                f"│ 👤 Игрок: [id{tid}|участник]\n"
+                f"│ ✅ Статус: Активных банов и мутов нет\n"
+                f"╰────────────"
             )
 
         return await m.answer(
-            f"🔍 ПРОВЕРКА БЛОКИРОВОК\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"👤 Игрок: [id{tid}|участник]\n\n" + "\n\n".join(status_lines)
-          elif cmd in ["+мутлист", "+преды", "+выги", "+баны", "+гбаны", "+чаты"]:
+            f"╭─ 🔍 ПРОВЕРКА ИГРОКА\n"
+            f"│ 👤 Игрок: [id{tid}|участник]\n"
+            f"│\n" + "\n│\n".join(status_lines) + "\n╰────────────"
+        )
+    elif cmd in ["+мутлист", "+преды", "+выги", "+баны", "+гбаны", "+чаты"]:
         if cmd == "+мутлист":
             if acc < 1:
                 return await m.answer("❌ Нужен 1+ ур.")
@@ -627,7 +654,8 @@ async def handler(m: Message):
             rows = cursor.fetchall()
             if not rows:
                 return await m.answer("📭 Активных мутов нет.")
-            return await m.answer("🔇 АКТИВНЫЕ МУТЫ\n━━━━━━━━━━━━━━\n" + "\n".join([f"▸ [id{u}|{n}] — {format_left(mu, now)}" for u, n, mu in rows]))
+            body = "\n".join([f"│ ▸ [id{u}|{n}] — {format_left(mu, now)}" for u, n, mu in rows])
+            return await m.answer(f"╭─ 🔇 АКТИВНЫЕ МУТЫ\n{body}\n╰────────────")
         if cmd in ["+преды", "+выги"]:
             if acc < 1:
                 return await m.answer("❌ Нужен 1+ ур.")
@@ -635,7 +663,8 @@ async def handler(m: Message):
             rows = cursor.fetchall()
             if not rows:
                 return await m.answer("📭 Нарушителей нет.")
-            return await m.answer("⚠️ НАРУШИТЕЛИ\n━━━━━━━━━━━━━━\n" + "\n".join([f"▸ [id{u}|{n}] — Выги: {w}/3 | Преды: {p}/2" for u, n, w, p in rows]))
+            body = "\n".join([f"│ ▸ [id{u}|{n}] — Выги: {w}/3 | Преды: {p}/2" for u, n, w, p in rows])
+            return await m.answer(f"╭─ ⚠️ НАРУШИТЕЛИ\n{body}\n╰────────────")
         if cmd == "+баны":
             if acc < 2:
                 return await m.answer("❌ Нужен 2+ ур.")
@@ -645,7 +674,8 @@ async def handler(m: Message):
             rows = cursor.fetchall()
             if not rows:
                 return await m.answer("📭 Локальный бан-лист пуст.")
-            return await m.answer("⛔ БАНЫ ЧАТА\n━━━━━━━━━━━━━━\n" + "\n".join([f"▸ [id{u}|Игрок] [{format_left(bu, now)}] — {r}" for u, r, bu in rows]))
+            body = "\n".join([f"│ ▸ [id{u}|Игрок] [{format_left(bu, now)}] — {r}" for u, r, bu in rows])
+            return await m.answer(f"╭─ ⛔ БАНЫ ЧАТА\n{body}\n╰────────────")
         if cmd == "+гбаны":
             if acc < 3:
                 return await m.answer("❌ Нужен 3+ ур.")
@@ -655,7 +685,8 @@ async def handler(m: Message):
             rows = cursor.fetchall()
             if not rows:
                 return await m.answer("📭 Глобальный бан-лист пуст.")
-            return await m.answer("🌐 ГЛОБАЛЬНЫЕ БАНЫ\n━━━━━━━━━━━━━━\n" + "\n".join([f"▸ [id{u}|Игрок] [{format_left(bu, now)}] — {r}" for u, r, bu in rows]))
+            body = "\n".join([f"│ ▸ [id{u}|Игрок] [{format_left(bu, now)}] — {r}" for u, r, bu in rows])
+            return await m.answer(f"╭─ 🌐 ГЛОБАЛЬНЫЕ БАНЫ\n{body}\n╰────────────")
         if acc < 3:
             return await m.answer("❌ Нужен 3+ ур.")
         cursor.execute("SELECT COUNT(*) FROM known_chats")
@@ -684,13 +715,12 @@ async def handler(m: Message):
             cursor.execute("UPDATE users SET access = ?, role_name = ? WHERE chat_id = ? AND user_id = ?", (lvl, title, cid, tid))
         conn.commit()
         await m.answer(
-            f"🎖 НАЗНАЧЕНИЕ РАНГА\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"👤 Игрок: [id{tid}|участник]\n"
-            f"📌 Роль: {title} ({lvl} ур.)"
+            f"╭─ 🎖 НАЗНАЧЕНИЕ РАНГА\n"
+            f"│ 👤 Игрок: [id{tid}|участник]\n"
+            f"│ 📌 Роль: {title} ({lvl} ур.)\n"
+            f"╰────────────"
         )
         await send_log(f"[id{m.from_id}|Админ] выдал ранг {title} ({lvl} ур.) игроку [id{tid}|участнику].")
-  )
     elif cmd in ["+бан", "-бан", "+гбан", "-гбан", "+гкик"]:
         req = 3 if cmd.startswith(("+г", "-г")) else 2
         if acc < req:
@@ -726,11 +756,11 @@ async def handler(m: Message):
             cursor.execute("UPDATE users SET access = 0, role_name = 'Участник' WHERE chat_id = ? AND user_id = ?", (cid, tid))
             conn.commit()
             await m.answer(
-                f"⛔ БАН В ЧАТЕ\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"👤 Игрок: [id{tid}|участник]\n"
-                f"⏱ Срок: {dur_label}\n"
-                f"💬 Причина: {reason}"
+                f"╭─ ⛔ БАН В ЧАТЕ\n"
+                f"│ 👤 Игрок: [id{tid}|участник]\n"
+                f"│ ⏱ Срок: {dur_label}\n"
+                f"│ 💬 Причина: {reason}\n"
+                f"╰────────────"
             )
             try:
                 await bot.api.messages.remove_chat_user(chat_id=m.chat_id, member_id=tid)
@@ -751,15 +781,14 @@ async def handler(m: Message):
                     k += 1
                 except Exception:
                     pass
-            srok_line = f"\n⏱ Срок: {dur_label}" if cmd == "+гбан" else ""
+            srok_line = f"\n│ ⏱ Срок: {dur_label}" if cmd == "+гбан" else ""
             await m.answer(
-                f"🌐 ГЛОБАЛЬНАЯ МЕРА ({cmd})\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"👤 Игрок: [id{tid}|участник] ({k}/{len(chats)} чатов){srok_line}\n"
-                f"💬 Причина: {reason}"
+                f"╭─ 🌐 ГЛОБАЛЬНАЯ МЕРА ({cmd})\n"
+                f"│ 👤 Игрок: [id{tid}|участник] ({k}/{len(chats)} чатов){srok_line}\n"
+                f"│ 💬 Причина: {reason}\n"
+                f"╰────────────"
             )
         await send_log(f"[id{m.from_id}|Админ] применил {cmd} ({dur_label}) к [id{tid}|игроку]. Причина: {reason}")
-
     elif cmd in ["+ник", "/snick", "+снятьник", "+гник", "-гник", "+гснятьник", "+мут", "-мут"]:
         is_glob_nick = cmd in ["+гник", "-гник", "+гснятьник"]
         req = 3 if is_glob_nick else 1
@@ -791,11 +820,11 @@ async def handler(m: Message):
             conn.commit()
             await send_log(f"[id{m.from_id}|Админ] установил глобальный ник «{nn}» [id{tid}|игроку].")
             return await m.answer(
-                f"🌐 ГЛОБАЛЬНЫЙ НИК\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"👤 Игрок: [id{tid}|участник]\n"
-                f"🏷 Новый ник: {nn}\n"
-                f"💬 Применено в беседах: {len(all_chats)}"
+                f"╭─ 🌐 ГЛОБАЛЬНЫЙ НИК\n"
+                f"│ 👤 Игрок: [id{tid}|участник]\n"
+                f"│ 🏷 Новый ник: {nn}\n"
+                f"│ 💬 Применено в беседах: {len(all_chats)}\n"
+                f"╰────────────"
             )
 
         if cmd == "+снятьник":
@@ -823,11 +852,11 @@ async def handler(m: Message):
         cursor.execute("UPDATE users SET mute_until = ? WHERE chat_id = ? AND user_id = ?", (now + parsed[0], cid, tid))
         conn.commit()
         await m.answer(
-            f"🔇 ВЫДАН МУТ\n"
-            f"━━━━━━━━━━━━━━\n"
-            f"👤 Игрок: [id{tid}|участник]\n"
-            f"⏱ Срок: {parsed[1]}\n"
-            f"💬 Причина: {reason}"
+            f"╭─ 🔇 ВЫДАН МУТ\n"
+            f"│ 👤 Игрок: [id{tid}|участник]\n"
+            f"│ ⏱ Срок: {parsed[1]}\n"
+            f"│ 💬 Причина: {reason}\n"
+            f"╰────────────"
         )
         await send_log(f"[id{m.from_id}|Админ] выдал мут ({parsed[1]}) [id{tid}|игроку].")
     elif cmd in ["+пред", "-пред", "+выг", "-выг", "/warn", "/unwarn", "+снятьвсе"]:
@@ -861,10 +890,10 @@ async def handler(m: Message):
             cursor.execute("UPDATE users SET warns = 0, preds = 0 WHERE chat_id = ? AND user_id = ?", (cid, tid))
             conn.commit()
             await m.answer(
-                f"🚫 ИСКЛЮЧЕНИЕ (3/3 ВЫГОВОРОВ)\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"👤 Игрок: [id{tid}|{tn}]\n"
-                f"💬 Причина: {reason}"
+                f"╭─ 🚫 ИСКЛЮЧЕНИЕ (3/3 ВЫГОВОРОВ)\n"
+                f"│ 👤 Игрок: [id{tid}|{tn}]\n"
+                f"│ 💬 Причина: {reason}\n"
+                f"╰────────────"
             )
             try:
                 await bot.api.messages.remove_chat_user(chat_id=m.chat_id, member_id=tid)
@@ -874,11 +903,11 @@ async def handler(m: Message):
             cursor.execute("UPDATE users SET warns = ?, preds = ? WHERE chat_id = ? AND user_id = ?", (tw, tp, cid, tid))
             conn.commit()
             await m.answer(
-                f"⚠️ ВЫДАНО НАКАЗАНИЕ\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"👤 Игрок: [id{tid}|{tn}]\n"
-                f"📊 Статус: Выги {tw}/3 | Преды {tp}/2\n"
-                f"💬 Причина: {reason}"
+                f"╭─ ⚠️ ВЫДАНО НАКАЗАНИЕ\n"
+                f"│ 👤 Игрок: [id{tid}|{tn}]\n"
+                f"│ 📊 Статус: Выги {tw}/3 | Преды {tp}/2\n"
+                f"│ 💬 Причина: {reason}\n"
+                f"╰────────────"
             )
         await send_log(f"[id{m.from_id}|Админ] выдал {cmd} [id{tid}|игроку] ({tw}/3, {tp}/2).")
 
@@ -892,10 +921,10 @@ async def handler(m: Message):
                 return await m.answer("⚠️ Укажите игрока.")
             reason = get_tail(m, args, 2) or "Не указана"
             await m.answer(
-                f"👢 ИСКЛЮЧЕНИЕ ИЗ ЧАТА\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"👤 Игрок: [id{tid}|участник]\n"
-                f"💬 Причина: {reason}"
+                f"╭─ 👢 ИСКЛЮЧЕНИЕ ИЗ ЧАТА\n"
+                f"│ 👤 Игрок: [id{tid}|участник]\n"
+                f"│ 💬 Причина: {reason}\n"
+                f"╰────────────"
             )
             try:
                 await bot.api.messages.remove_chat_user(chat_id=m.chat_id, member_id=tid)
@@ -939,11 +968,11 @@ async def handler(m: Message):
             cursor.execute("SELECT COUNT(*) FROM local_bans WHERE chat_id = ?", (cid,))
             b_c = cursor.fetchone()[0]
             await m.answer(
-                f"ℹ️ ПАСПОРТ БЕСЕДЫ\n"
-                f"━━━━━━━━━━━━━━\n"
-                f"🆔 ID: {cid} | Игроков: {u_c} | Банов: {b_c}\n"
-                f"🛡 Защита: Тишина [{sil}] | Капс [{acaps}] | Флуд [{aflood}] | Ссылки [{alink}]\n"
-                f"⚙️ Доп: Автоочистка [{aclean_sys}] | Автокик ливнувших [Вкл]"
+                f"╭─ ℹ️ ПАСПОРТ БЕСЕДЫ\n"
+                f"│ 🆔 ID: {cid} | Игроков: {u_c} | Банов: {b_c}\n"
+                f"│ 🛡 Защита: Тишина [{sil}] | Капс [{acaps}] | Флуд [{aflood}] | Ссылки [{alink}]\n"
+                f"│ ⚙️ Доп: Автоочистка [{aclean_sys}] | Автокик ливнувших [Вкл]\n"
+                f"╰────────────"
             )
 
     elif cmd in ["+приветствие", "+устправила", "+сбросстатистики", "+чсбота", "-чсбота", "+логчат", "-логчат", "+рассылка"]:
@@ -988,7 +1017,11 @@ async def handler(m: Message):
             s = 0
             for (pid,) in chats:
                 try:
-                    await bot.api.messages.send(peer_id=pid, message=f"📣 ОБЪЯВЛЕНИЕ\n━━━━━━━━━━━━━━\n{txt}", random_id=0)
+                    await bot.api.messages.send(
+                        peer_id=pid,
+                        message=f"╭─ 📣 ОБЪЯВЛЕНИЕ\n│ {txt}\n╰────────────",
+                        random_id=0
+                    )
                     s += 1
                 except Exception:
                     pass
