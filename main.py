@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from vkbottle.bot import Bot, Message
 
-TOKEN = "ВСТАВЬ_СЮДА_НОВЫЙ_ТОКЕН_ГРУППЫ"
+TOKEN = "vk1.a.nSVDeqVxBl5NwrIv-1FiT_lfVkQ5FTVcnVbgDjX7tNUIL-2uUQWxqUsyvZxkXB9expe5MeE51yCh6474-Wr2kaEfbJ09PJIBu6wL28VjeRKFsLFVrYu0GLFr5INSOcgps7tKxtAB-d2x_3s1xfH59TYTPcRz9bSX3PPcBfZgdWbOThKheFnUG72Xb9lM2T0YO0c_QBKJdQUOYILFq9tmQw"
 OWNER_ID = 807140123
 
 bot = Bot(token=TOKEN)
