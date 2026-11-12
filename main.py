@@ -12,7 +12,6 @@ bot = Bot(token=TOKEN)
 conn = sqlite3.connect("rp_manager_network.db")
 cursor = conn.cursor()
 START_TIME = time.time()
-
 cursor.execute("CREATE TABLE IF NOT EXISTS known_chats (chat_id INTEGER PRIMARY KEY)")
 cursor.execute("CREATE TABLE IF NOT EXISTS global_staff (user_id INTEGER PRIMARY KEY, role_name TEXT DEFAULT 'Участник', access INTEGER DEFAULT 0)")
 cursor.execute("""
@@ -38,6 +37,7 @@ cursor.execute("CREATE TABLE IF NOT EXISTS global_bans (user_id INTEGER PRIMARY 
 cursor.execute("CREATE TABLE IF NOT EXISTS user_notes (chat_id INTEGER, user_id INTEGER, author_id INTEGER, note_text TEXT, created_at INTEGER)")
 cursor.execute("CREATE TABLE IF NOT EXISTS bot_blacklist (user_id INTEGER PRIMARY KEY, reason TEXT)")
 cursor.execute("CREATE TABLE IF NOT EXISTS bot_config (key TEXT PRIMARY KEY, value TEXT)")
+
 migrations = [
     "ALTER TABLE users ADD COLUMN msgs INTEGER DEFAULT 0",
     "ALTER TABLE users ADD COLUMN rep INTEGER DEFAULT 0",
@@ -55,7 +55,6 @@ for q in migrations:
     except Exception:
         pass
 conn.commit()
-
 last_msg_time = {}
 
 LINK_PATTERN = re.compile(
@@ -183,7 +182,6 @@ async def send_log(text: str):
             )
         except Exception:
             pass
-
 def check_ban(cid: int, uid: int):
     now_ts = int(time.time())
     cursor.execute("SELECT reason, ban_until FROM global_bans WHERE user_id = ?", (uid,))
@@ -217,6 +215,7 @@ def get_target(m: Message, args: list):
 
 def get_tail(m: Message, args: list, start: int = 2):
     return " ".join(args[1:]) if m.reply_message else " ".join(args[start:])
+
 async def expiration_worker():
     while True:
         await asyncio.sleep(45)
@@ -323,6 +322,7 @@ async def handler(m: Message):
                     f"💡 Напиши «+помощь», чтобы открыть список команд."
                 )
             return
+
     if not m.text or m.from_id < 0:
         return
 
@@ -383,7 +383,6 @@ async def handler(m: Message):
         cursor.execute("SELECT 1 FROM bot_blacklist WHERE user_id = ?", (m.from_id,))
         if cursor.fetchone():
             return
-
     if cmd in ["/help", "!помощь", "/помощь", "+помощь", "+команды"]:
         sub = args[1].lower().lstrip("+/-!") if len(args) > 1 else ""
         if sub in HELP_DICT:
@@ -448,7 +447,8 @@ async def handler(m: Message):
             "⚔️ +помощь админ — выги, баны, защита чата\n"
             "👑 +помощь га — глобал-бан, ранги, настройки\n\n"
             "💡 Совет: команду можно писать ответом на сообщение игрока!"
-     elif cmd in ["+новыйгод", "+нг", "/newyear"]:
+        )
+    elif cmd in ["+новыйгод", "+нг", "/newyear"]:
         now_dt = datetime.now()
         next_year = now_dt.year + 1
         ny_dt = datetime(next_year, 1, 1, 0, 0, 0)
@@ -536,7 +536,6 @@ async def handler(m: Message):
         if not rows:
             return await m.answer("📭 Досье этого игрока пусто.")
         await m.answer(f"🗂 ДОСЬЕ [id{tid}|ИГРОКА]\n────────────\n" + "\n".join([f"▸ {t} (от [id{a}|адм])" for a, t in rows]))
-       )
     elif cmd in ["+ники", "/nicks", "!ники", "+найтиник"]:
         if cmd == "+найтиник":
             if acc < 1:
@@ -623,7 +622,7 @@ async def handler(m: Message):
         tid = get_target(m, args)
         if not tid or tid == OWNER_ID or tid == m.from_id:
             return await m.answer("⚠️ Укажите корректного игрока.")
-        is_glob = cmd.startswith("+г") and cmd not in ["+га", "+гснять"] or cmd == "+гснять"
+        is_glob = cmd.startswith("+г") and cmd != "+га"
         t_acc = get_global(tid)[1] if is_glob else get_user(cid, tid)[2]
         if t_acc >= acc and m.from_id != OWNER_ID:
             return await m.answer("❌ Нельзя изменить ранг равного или старшего.")
@@ -755,7 +754,6 @@ async def handler(m: Message):
             f"💬 Причина: {reason}"
         )
         await send_log(f"[id{m.from_id}|Админ] выдал мут ({parsed[1]}) [id{tid}|игроку].")
-
     elif cmd in ["+пред", "-пред", "+выг", "-выг", "/warn", "/unwarn", "+снятьвсе"]:
         req = 1 if cmd in ["+пред", "-пред"] else (3 if cmd == "+снятьвсе" else 2)
         if acc < req:
@@ -807,6 +805,7 @@ async def handler(m: Message):
                 f"💬 Причина: {reason}"
             )
         await send_log(f"[id{m.from_id}|Админ] выдал {cmd} [id{tid}|игроку] ({tw}/3, {tp}/2).")
+
     elif cmd in ["+кик", "/kick", "+кикмолчунов", "+тишина", "+антикапс", "+антифлуд", "+антиссылка", "+автоочистка", "+созыв", "+очистить", "+инфочат"]:
         req = 3 if cmd == "+кикмолчунов" else 2
         if acc < req:
