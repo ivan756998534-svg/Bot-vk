@@ -1335,5 +1335,5 @@ async def handler(m: Message):
                     pass
             await m.answer(f"✅ Отправлено в {s} из {len(chats)} чатов.")
 
-bot.on_startup.append(expiration_worker)
+bot.loop_wrapper.add_task(expiration_worker())
 bot.run()
