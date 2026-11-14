@@ -28,8 +28,8 @@ def nth(items, idx, default=""):
     return next(it, default)
 FORUM_HOST = "https:" + "//" + "whg115065.sampproject.ru" + "/index.php?forums/"
 FORUM_SECTIONS = [
-    ("Жалобы на администрацию", FORUM_HOST + urllib.parse.quote("Жалобы-на-администрацию") + ".20/index.rss"),
-    ("Обжалование наказаний", FORUM_HOST + urllib.parse.quote("Обжалование-на-администрацию") + ".23/index.rss")
+    ("Жалобы на администрацию", FORUM_HOST + "20/index.rss"),
+    ("Обжалование наказаний", FORUM_HOST + "23/index.rss")
 ]
 DC_CREATOR_TAG = "{http:" + "//" + "purl.org/dc/elements/1.1/}creator"
 forum_watcher_started = False
