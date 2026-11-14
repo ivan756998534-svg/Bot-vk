@@ -26,12 +26,12 @@ def nth(items, idx, default=""):
     for _ in range(idx):
         next(it, None)
     return next(it, default)
-FORUM_HOST = "https://sampproject.ru"
+FORUM_HOST = "https:" + "//" + "whg115065.sampproject.ru" + "/index.php?forums/"
 FORUM_SECTIONS = [
     ("Жалобы на администрацию", FORUM_HOST + urllib.parse.quote("Жалобы-на-администрацию") + ".20/index.rss"),
-    ("Обжалование наказаний", FORUM_HOST + urllib.parse.quote("Обжалование-наказаний") + ".23/index.rss")
+    ("Обжалование наказаний", FORUM_HOST + urllib.parse.quote("Обжалование-на-администрацию") + ".23/index.rss")
 ]
-DC_CREATOR_TAG = "{http://purl.org}creator"
+DC_CREATOR_TAG = "{http:" + "//" + "purl.org/dc/elements/1.1/}creator"
 forum_watcher_started = False
 cursor.execute("CREATE TABLE IF NOT EXISTS known_chats (chat_id INTEGER PRIMARY KEY, title TEXT DEFAULT 'Беседа проекта')")
 cursor.execute("CREATE TABLE IF NOT EXISTS chat_requests (chat_id INTEGER PRIMARY KEY, requester_id INTEGER, title TEXT, created_at INTEGER)")
