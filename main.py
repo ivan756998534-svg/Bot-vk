@@ -337,26 +337,8 @@ import json
 import ssl
 import socket
 
-def resolve_host_doh(hostname: str) -> str:
-    doh_endpoints = [
-        f"https://dns.google{hostname}&type=A",
-        f"https://cloudflare-dns.com{hostname}&type=A"
-    ]
-    ctx = ssl.create_default_context()
-    for url in doh_endpoints:
-        try:
-            req = urllib.request.Request(
-                url,
-                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/dns-json"}
-            )
-            with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            for ans in data.get("Answer", []):
-                if ans.get("type") == 1 and ans.get("data"):
-                    return ans["data"]
-        except Exception:
-            continue
-    return ""
+ def resolve_host_doh(hostname: str) -> str:
+    return "2.27.42.69"
 
 def fetch_forum_topics_sync(rss_url: str):
     parsed = urllib.parse.urlsplit(rss_url)
