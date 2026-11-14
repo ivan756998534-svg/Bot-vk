@@ -333,17 +333,64 @@ def get_target(m: Message, args: list):
 
 def get_tail(m: Message, args: list, start: int = 2):
     return " ".join(args[1:]) if m.reply_message else " ".join(args[start:])
-def fetch_forum_topics_sync(rss_url: str):
-    cj = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
-    opener.addheaders = [
-        ("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
-        ("Accept", "application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.8"),
-        ("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"),
-        ("Referer", "https://sampproject.ru")
+import json
+import ssl
+import socket
+
+def resolve_host_doh(hostname: str) -> str:
+    doh_endpoints = [
+        f"https://dns.google{hostname}&type=A",
+        f"https://cloudflare-dns.com{hostname}&type=A"
     ]
-    with opener.open(rss_url, timeout=15) as resp:
-        xml_bytes = resp.read()
+    ctx = ssl.create_default_context()
+    for url in doh_endpoints:
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "Mozilla/5.0", "Accept": "application/dns-json"}
+            )
+            with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            for ans in data.get("Answer", []):
+                if ans.get("type") == 1 and ans.get("data"):
+                    return ans["data"]
+        except Exception:
+            continue
+    return ""
+
+def fetch_forum_topics_sync(rss_url: str):
+    parsed = urllib.parse.urlsplit(rss_url)
+    host = parsed.hostname or ""
+    ip_addr = resolve_host_doh(host)
+
+    orig_getaddrinfo = socket.getaddrinfo
+    if ip_addr:
+        def custom_getaddrinfo(h, p, *args, **kwargs):
+            if h == host:
+                return orig_getaddrinfo(ip_addr, p, *args, **kwargs)
+            return orig_getaddrinfo(h, p, *args, **kwargs)
+        socket.getaddrinfo = custom_getaddrinfo
+
+    try:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        cj = http.cookiejar.CookieJar()
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(cj),
+            urllib.request.HTTPSHandler(context=ctx)
+        )
+        opener.addheaders = [
+            ("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
+            ("Accept", "application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.8"),
+            ("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"),
+            ("Referer", f"https://{host}/")
+        ]
+        with opener.open(rss_url, timeout=15) as resp:
+            xml_bytes = resp.read()
+    finally:
+        socket.getaddrinfo = orig_getaddrinfo
+
     text_preview = xml_bytes[:400].decode("utf-8", errors="ignore").lower()
     if "<html" in text_preview and "<rss" not in text_preview:
         raise ValueError("Форум вернул HTML вместо RSS (включена антибот-защита или раздел закрыт для гостей)")
