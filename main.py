@@ -335,8 +335,7 @@ def get_tail(m: Message, args: list, start: int = 2):
     return " ".join(args[1:]) if m.reply_message else " ".join(args[start:])
 import json
 import ssl
-import socket
-def resolve_host_doh(hostname: str) -> str:
+import socket def resolve_host_doh(hostname: str) -> str:
     return "2.27.42.69"
 def fetch_forum_topics_sync(rss_url: str):
     parsed = urllib.parse.urlsplit(rss_url)
