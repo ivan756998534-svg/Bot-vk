@@ -1457,6 +1457,15 @@ async def handler(m: Message):
                 ],
                 "Новые темы будут приходить сюда автоматически каждые 45 сек."
             ))
+            if cmd == "+тестфорум":
+            report = []
+            for sec_name, rss_url in FORUM_SECTIONS:
+                try:
+                    t_list = await asyncio.to_thread(fetch_forum_topics_sync, rss_url)
+                    report.append(f"✅ {sec_name}: найдено тем — {len(t_list)}")
+                except Exception as e:
+                    report.append(f"❌ {sec_name}: ошибка — {e}")
+            return await m.answer(ui_box("🔍 ДИАГНОСТИКА ФОРУМА", report))
         if cmd in ["+чсбота", "-чсбота"]:
             tid = get_target(m, args)
             if not tid or tid == OWNER_ID:
