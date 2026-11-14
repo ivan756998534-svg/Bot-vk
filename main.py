@@ -28,12 +28,14 @@ def nth(items, idx, default=""):
         next(it, None)
     return next(it, default)
 
-FORUM_HOST = "https://sampproject.ru"
+FORUM_HOST = "https://whg115065.sampproject.ru"
 FORUM_SECTIONS = [
-    ("Жалобы на администрацию", FORUM_HOST + "20/index.rss"),
-    ("Обжалование наказаний", FORUM_HOST + "23/index.rss")
+    ("Жалобы на администрацию", f"{FORUM_HOST}/index.php?forums/20/index.rss"),
+    ("Обжалование наказаний", f"{FORUM_HOST}/index.php?forums/23/index.rss")
 ]
-DC_CREATOR_TAG = "{http://purl.org}creator"
+DC_CREATOR_TAG = "{http://purl.org/dc/elements/1.1/}creator"
+
+FORUM_COOKIE_HEADER = "xf_csrf=8L5En5h0cHTXUf5V;xf_user=39%2C_ZASys6PaEnhpoSAoKi2KSJOiXuejXR7RYco7qCk;xf_session=wDyAao8QtezHzoF4HfJgAq0e9y2ZI9Zt"
 forum_watcher_started = False
 cursor.execute("CREATE TABLE IF NOT EXISTS known_chats (chat_id INTEGER PRIMARY KEY, title TEXT DEFAULT 'Беседа проекта')")
 cursor.execute("CREATE TABLE IF NOT EXISTS chat_requests (chat_id INTEGER PRIMARY KEY, requester_id INTEGER, title TEXT, created_at INTEGER)")
