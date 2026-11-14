@@ -335,46 +335,20 @@ def get_target(m: Message, args: list):
 
 def get_tail(m: Message, args: list, start: int = 2):
     return " ".join(args[1:]) if m.reply_message else " ".join(args[start:])
-import json
-import ssl
-import socket def resolve_host_doh(hostname: str) -> str:
-    return "2.27.42.69"
+import cloudscraper
+
 def fetch_forum_topics_sync(rss_url: str):
-    parsed = urllib.parse.urlsplit(rss_url)
-    host = parsed.hostname or ""
-    ip_addr = resolve_host_doh(host)
-
-    orig_getaddrinfo = socket.getaddrinfo
-    if ip_addr:
-        def custom_getaddrinfo(h, p, *args, **kwargs):
-            if h == host:
-                return orig_getaddrinfo(ip_addr, p, *args, **kwargs)
-            return orig_getaddrinfo(h, p, *args, **kwargs)
-        socket.getaddrinfo = custom_getaddrinfo
-
-    try:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        cj = http.cookiejar.CookieJar()
-        opener = urllib.request.build_opener(
-            urllib.request.HTTPCookieProcessor(cj),
-            urllib.request.HTTPSHandler(context=ctx)
-        )
-        opener.addheaders = [
-            ("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
-            ("Accept", "application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.8"),
-            ("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"),
-            ("Referer", f"https://{host}/")
-        ]
-        with opener.open(rss_url, timeout=15) as resp:
-            xml_bytes = resp.read()
-    finally:
-        socket.getaddrinfo = orig_getaddrinfo
+    scraper = cloudscraper.create_scraper(
+        browser={"browser": "chrome", "platform": "windows", "desktop": True}
+    )
+    resp = scraper.get(rss_url, headers={"Cookie": FORUM_COOKIE_HEADER}, timeout=15)
+    resp.raise_for_status()
+    xml_bytes = resp.content
 
     text_preview = xml_bytes[:400].decode("utf-8", errors="ignore").lower()
     if "<html" in text_preview and "<rss" not in text_preview:
-        raise ValueError("Форум вернул HTML вместо RSS (включена антибот-защита или раздел закрыт для гостей)")
+        raise ValueError("Форум вернул HTML вместо RSS (проверь куки или защиту)")
+
     root = ET.fromstring(xml_bytes)
     topics = []
     for item in root.findall(".//item"):
@@ -390,6 +364,7 @@ def fetch_forum_topics_sync(rss_url: str):
             if t_title and t_link:
                 topics.append((t_guid, t_title, t_link, t_author))
     return topics
+
 async def background_tasks_loop():
     while True:
         await asyncio.sleep(45)
