@@ -13,6 +13,9 @@ doc_uploader = DocMessagesUploader(bot.api)
 conn = sqlite3.connect("rp_manager_network.db")
 cursor = conn.cursor()
 START_TIME = time.time()
+
+def first(items):
+    return next(iter(items), "")
 cursor.execute("CREATE TABLE IF NOT EXISTS known_chats (chat_id INTEGER PRIMARY KEY, title TEXT DEFAULT 'Беседа проекта')")
 cursor.execute("CREATE TABLE IF NOT EXISTS chat_requests (chat_id INTEGER PRIMARY KEY, requester_id INTEGER, title TEXT, created_at INTEGER)")
 cursor.execute("CREATE TABLE IF NOT EXISTS global_staff (user_id INTEGER PRIMARY KEY, role_name TEXT DEFAULT 'Участник', access INTEGER DEFAULT 0)")
@@ -80,8 +83,9 @@ HELP_DICT = {
     "ник": "🏷 +ник [@игрок] [Ник]\nУстанавливает игровой ник участнику в текущей беседе.",
     "гник": "🌐 +гник [@игрок] [Ник]\nУстанавливает ник сразу во всех беседах. Снять: -гник @игрок",
     "срок": "⏳ +срок [@игрок] [дни] / -срок [@игрок]\nУстанавливает срок поста (например: +срок @durov 30). Список: +сроки",
-    "приветствие": "👋 +приветствие [текст]\nЗадаёт приветствие. Вкл/выкл: +приветствие_режим [№ чата] | Удалить: -приветствие [№ чата]",
+    "приветствие": "👋 +приветствие [текст]\nЗадаёт приветствие. Вкл/выкл: +приветствие_режим [№] | Удалить: -приветствие [№]",
     "закреп": "📌 +закреп (ответом на сообщение) / -закреп\nЗакрепляет или открепляет сообщение в беседе.",
+    "чранг": "🎯 +чмодер / +чадмин / +чга / +чзга / +чспец / +чснять [@игрок] [№ чатов]\nВыдаёт или снимает должность в конкретных беседах из списка «+чаты».",
     "мут": "🔇 +мут [@игрок] [срок] [причина]\nПримеры: +мут @durov 30м Флуд | +мут @durov 2ч Спам",
     "пред": "⚠️ +пред [@игрок] [причина]\nВыдаёт устное предупреждение (2 преда = 1 выговор).",
     "выг": "📛 +выг [@игрок] [причина]\nВыдаёт строгий выговор (3 выговора = автокик).",
@@ -90,10 +94,20 @@ HELP_DICT = {
     "бэкап": "💾 +бэкап\nОтправляет резервную копию базы данных владельцу в ЛС."
 }
 def ui_box(title: str, lines: list, footer: str = "") -> str:
-    body = "\n".join([f"▫️ {line}" if not line.startswith(("•", "▸", "—", "\n")) else line for line in lines if line])
-    res = f"【 {title} 】\n\n{body}"
+    clean_lines = []
+    for line in lines:
+        if not line:
+            continue
+        if line.startswith("\n"):
+            clean_lines.append(line)
+        elif line.startswith(("•", "▸", "—", "👤", "🛡", "⚔️", "👑", "🎯", "🌐", "📌", "👋", "⛔", "🔇", "⚠️")):
+            clean_lines.append(f"  {line}")
+        else:
+            clean_lines.append(f"  ▸ {line}")
+    body = "\n".join(clean_lines)
+    res = f"╭──「 {title} 」──╮\n\n{body}\n\n╰──────────────────╯"
     if footer:
-        res += f"\n\n💡 {footer}"
+        res += f"\n💡 {footer}"
     return res
 
 def parse_duration(token: str):
@@ -212,10 +226,11 @@ def get_user(cid: int, uid: int):
 async def send_log(text: str):
     cursor.execute("SELECT value FROM bot_config WHERE key = 'log_chat'")
     r = cursor.fetchone()
-    if r and r[0]:
+    val = first(r) if r else ""
+    if val:
         try:
             await bot.api.messages.send(
-                peer_id=int(r[0]),
+                peer_id=int(val),
                 message=f"📜 ЖУРНАЛ ДЕЙСТВИЙ\n\n{text}",
                 random_id=0
             )
@@ -271,8 +286,8 @@ def check_ban(cid: int, uid: int):
 def get_target(m: Message, args: list):
     if m.reply_message:
         return m.reply_message.from_id
-    if len(args) > 1:
-        target_arg = args[1]
+    target_arg = first(args[1:])
+    if target_arg:
         match = re.search(r"\[id(\d+)\|", target_arg)
         if match:
             return int(match.group(1))
@@ -319,16 +334,12 @@ async def expiration_worker():
                     await send_log(f"🏁 Окончание срока: у [id{uid}|{nick}] в чате {cid} подошёл к концу назначенный срок поста!")
         except Exception:
             pass
-
-@bot.loop_wrapper.interval(seconds=3600)
-async def keep_alive():
-    pass
 @bot.on.chat_message()
 async def handler(m: Message):
     cid = m.peer_id
     text_raw = (m.text or "").strip()
     args_pre = text_raw.split()
-    cmd_pre = args_pre.lower() if args_pre else ""
+    cmd_pre = first(args_pre).lower()
     _, _, acc_pre, _, _, _, _, _, _ = get_user(cid, m.from_id) if m.from_id > 0 else ("", "", 0, 0, 0, 0, 0, 0, 0)
 
     if cmd_pre in ["+заявка", "+подключить"]:
@@ -373,7 +384,7 @@ async def handler(m: Message):
             return await m.answer("✅ Эта беседа уже состоит в объединении.")
         cursor.execute("SELECT title FROM chat_requests WHERE chat_id = ?", (cid,))
         req_row = cursor.fetchone()
-        req_title = req_row if req_row else ""
+        req_title = first(req_row) if req_row else ""
         custom_title = " ".join(args_pre[1:]).strip()
         chat_title = custom_title or req_title or await fetch_chat_title(cid)
         register_chat(cid, chat_title)
@@ -526,9 +537,9 @@ async def handler(m: Message):
         return
 
     args = m.text.strip().split()
-    if not args:
+    cmd = first(args).lower()
+    if not cmd:
         return
-    cmd = args[0].lower()
     if acc < 1:
         if alink == 1 and LINK_PATTERN.search(m.text):
             try:
@@ -566,7 +577,7 @@ async def handler(m: Message):
         if cursor.fetchone():
             return
     if cmd in ["/help", "!помощь", "/помощь", "+помощь", "+команды"]:
-        sub = args[1].lower().lstrip("+/-!") if len(args) > 1 else ""
+        sub = first(args[1:]).lower().lstrip("+/-!")
         if sub in HELP_DICT:
             return await m.answer(ui_box("📖 СПРАВКА ПО КОМАНДЕ", [HELP_DICT[sub]]))
         if sub == "игрок":
@@ -622,8 +633,9 @@ async def handler(m: Message):
                     "+приветствие_режим [№] / -приветствие [№] — вкл/выкл/удалить",
                     "+устправила / +устссылки [текст]",
                     "+сбросстатистики — обнулить счётчик сообщений",
-                    "Ранги: +модер, +админ, +га, +зга, +спец, +снять",
+                    "Ранги чата: +модер, +админ, +га, +зга, +спец, +снять",
                     "Глобал: +гмодер, +гадмин, +гга, +гспец, +гснять",
+                    "По № чатов: +чмодер, +чадмин, +чга, +чзга, +чспец, +чснять [@игрок] [№...]",
                     "[4–5 ур.]: +старт, +одобрить, +чаты, -чат [№], +заявки",
                     "[4–5 ур.]: +логчат, -логчат, +чсбота, -чсбота, +рассылка",
                     "[Владелец]: +бэкап — скачать базу данных в ЛС"
@@ -739,10 +751,10 @@ async def handler(m: Message):
             conn.commit()
             return await m.answer(f"✅ Отсчёт срока поста снят с [id{tid}|игрока].")
 
-        idx = 1 if m.reply_message else 2
-        if len(args) <= idx or not args[idx].isdigit():
+        days_str = first(args[1:]) if m.reply_message else first(args[2:])
+        if not days_str.isdigit():
             return await m.answer("⚠️ Укажите срок в днях. Пример: +срок @игрок 30")
-        days = int(args[idx])
+        days = int(days_str)
         if days <= 0 or days > 365:
             return await m.answer("⚠️ Укажите корректное количество дней (от 1 до 365).")
         end_ts = now + (days * 86400)
@@ -809,7 +821,7 @@ async def handler(m: Message):
                 st.append((u_acc, f"[{u_acc} ур. | {u_role}] — [id{u}|{n if n != 'Не установлен' else 'Без ника'}]"))
         if not st:
             return await m.answer("📭 Администрация чата не назначена.")
-        st.sort(key=lambda x: x[0], reverse=True)
+        st.sort(key=lambda x: first(x), reverse=True)
         await m.answer(ui_box("🛡 СОСТАВ ЧАТА", [line for _, line in st]))
 
     elif cmd in ["+чекбан", "+банчек", "/checkban"]:
@@ -858,9 +870,10 @@ async def handler(m: Message):
             lines = [f"{idx_c}. {c_title}{' (текущая)' if c_id == cid else ''}" for idx_c, (c_id, c_title) in enumerate(rows, 1)]
             return await m.answer(ui_box("🌐 ОБЪЕДИНЁННЫЕ БЕСЕДЫ", lines, "Открепить: -чат [номер из списка]"))
         if cmd == "-чат":
-            if len(args) < 2 or not args.isdigit():
+            num_str = first(args[1:])
+            if not num_str.isdigit():
                 return await m.answer("⚠️ Укажите номер беседы из списка «+чаты».")
-            num = int(args)
+            num = int(num_str)
             cursor.execute("SELECT chat_id, title FROM known_chats ORDER BY ROWID ASC")
             rows = cursor.fetchall()
             if num < 1 or num > len(rows):
@@ -917,6 +930,43 @@ async def handler(m: Message):
             return await m.answer("📭 Глобальный бан-лист пуст.")
         body = [f"[id{u}|Игрок] [{format_left(bu, now)}] — {r}" for u, r, bu in rows]
         return await m.answer(ui_box("🌐 ГЛОБАЛЬНЫЕ БАНЫ", body))
+    elif cmd in ["+чмодер", "+чадмин", "+чга", "+чзга", "+чспец", "+чснять"]:
+        if acc < 4:
+            return await m.answer("❌ Назначение должностей по номерам бесед доступно с 4+ ур.")
+        tid = get_target(m, args)
+        if not tid or tid == OWNER_ID or tid == m.from_id:
+            return await m.answer("⚠️ Укажите корректного игрока.")
+        raw_nums = " ".join(args[1:]) if m.reply_message else " ".join(args[2:])
+        nums = [int(x) for x in re.findall(r"\d+", raw_nums)]
+        if not nums:
+            return await m.answer("⚠️ Укажите номера бесед из списка «+чаты». Пример: +чмодер @игрок 1 3")
+        rmap = {"модер": (1, "Модератор"), "админ": (2, "Администратор"), "га": (3, "ГА/ЗГА"), "зга": (3, "ГА/ЗГА"), "спец": (4, "Спец. адм"), "снять": (0, "Участник")}
+        lvl, title = rmap[cmd[2:]]
+        if lvl >= acc and m.from_id != OWNER_ID:
+            return await m.answer("❌ Можно выдавать ранг только ниже своего.")
+        cursor.execute("SELECT chat_id, title FROM known_chats ORDER BY ROWID ASC")
+        all_chats = cursor.fetchall()
+        applied = []
+        skipped = []
+        for n in dict.fromkeys(nums):
+            if n < 1 or n > len(all_chats):
+                skipped.append(f"№{n} (не найден)")
+                continue
+            t_cid, t_title = all_chats[n - 1]
+            _, _, cur_l_acc, _, _, _, _, _, _ = get_user(t_cid, tid)
+            if cur_l_acc >= acc and m.from_id != OWNER_ID:
+                skipped.append(f"№{n} (ранг выше)")
+                continue
+            cursor.execute("UPDATE users SET access = ?, role_name = ? WHERE chat_id = ? AND user_id = ?", (lvl, title, t_cid, tid))
+            applied.append(f"№{n} «{t_title}»")
+        conn.commit()
+        if not applied:
+            return await m.answer("⚠️ Не удалось обновить должность ни в одной из указанных бесед.")
+        res_lines = [f"Игрок: [id{tid}|участник]", f"Роль: {title} ({lvl} ур.)", f"Применено: {', '.join(applied)}"]
+        if skipped:
+            res_lines.append(f"Пропущено: {', '.join(skipped)}")
+        await m.answer(ui_box("🎯 ДОЛЖНОСТЬ ПО ЧАТАМ", res_lines))
+        await send_log(f"[id{m.from_id}|Админ] назначил {title} ({lvl} ур.) [id{tid}|игроку] в чатах: {', '.join(applied)}.")
     elif cmd in ["+модер", "+админ", "+га", "+зга", "+спец", "+снять", "+гмодер", "+гадмин", "+гга", "+гзга", "+гспец", "+гснять"]:
         if acc < 2:
             return await m.answer("❌ Нужен 2+ ур.")
@@ -968,8 +1018,9 @@ async def handler(m: Message):
         idx_start = 1 if m.reply_message else 2
         ban_until = 0
         dur_label = "Навсегда"
-        if cmd in ["+бан", "+гбан"] and len(args) > idx_start:
-            parsed = parse_duration(args[idx_start])
+        dur_token = first(args[idx_start:])
+        if cmd in ["+бан", "+гбан"] and dur_token:
+            parsed = parse_duration(dur_token)
             if parsed:
                 b_sec, b_txt = parsed
                 ban_until = now + b_sec
@@ -1046,9 +1097,10 @@ async def handler(m: Message):
             conn.commit()
             return await m.answer("🔊 Мут снят.")
         idx = 1 if m.reply_message else 2
-        if len(args) <= idx:
+        dur_token = first(args[idx:])
+        if not dur_token:
             return await m.answer("⚠️ Пример: +мут @игрок 30м Флуд (или 2ч / 1д)")
-        parsed = parse_duration(args[idx])
+        parsed = parse_duration(dur_token)
         if not parsed:
             return await m.answer("⚠️ Укажите корректное время (30м, 2ч, 1д).")
         reason = " ".join(args[idx+1:]) or "Не указана"
@@ -1174,7 +1226,6 @@ async def handler(m: Message):
                     f"Автоочистка: {'Вкл' if aclean_sys else 'Выкл'} | Антислив: Вкл"
                 ]
             ))
-
     elif cmd in ["+приветствие", "+приветствие_режим", "-приветствие", "+устправила", "+устссылки", "+сбросстатистики", "+чсбота", "-чсбота", "+логчат", "-логчат", "+рассылка", "+бэкап"]:
         if cmd == "+бэкап":
             if m.from_id != OWNER_ID:
@@ -1195,16 +1246,18 @@ async def handler(m: Message):
                 return await m.answer("✅ Файл базы данных отправлен вам в личные сообщения.")
             except Exception as e:
                 return await m.answer(f"⚠️ Не удалось отправить бэкап (напишите боту в ЛС сначала). Ошибка: {e}")
+
         req = 4 if cmd in ["+чсбота", "-чсбота", "+логчат", "-логчат", "+рассылка"] else 3
         if acc < req:
             return await m.answer(f"❌ Нужен {req}+ ур.")
         if cmd == "+приветствие_режим":
             target_cid = cid
             target_label = "текущей беседе"
-            if len(args) > 1 and args[1].isdigit():
+            num_str = first(args[1:])
+            if num_str.isdigit():
                 if acc < 4:
                     return await m.answer("❌ Управление чужим чатом по номеру доступно с 4+ ур.")
-                num = int(args[1])
+                num = int(num_str)
                 cursor.execute("SELECT chat_id, title FROM known_chats ORDER BY ROWID ASC")
                 rows = cursor.fetchall()
                 if num < 1 or num > len(rows):
@@ -1212,17 +1265,18 @@ async def handler(m: Message):
                 target_cid, target_title = rows[num - 1]
                 target_label = f"беседе «{target_title}» (№{num})"
             t_set = get_chat_settings(target_cid)
-            nv = 0 if t_set[2] == 1 else 1
+            nv = 0 if t_set == 1 else 1
             cursor.execute("UPDATE chat_settings SET welcome_enabled = ? WHERE chat_id = ?", (nv, target_cid))
             conn.commit()
             return await m.answer(f"👋 Приветствие в {target_label}: {'Включено ✅' if nv == 1 else 'Отключено ❌'}")
         if cmd == "-приветствие":
             target_cid = cid
             target_label = "текущей беседе"
-            if len(args) > 1 and args[1].isdigit():
+            num_str = first(args[1:])
+            if num_str.isdigit():
                 if acc < 4:
                     return await m.answer("❌ Управление чужим чатом по номеру доступно с 4+ ур.")
-                num = int(args[1])
+                num = int(num_str)
                 cursor.execute("SELECT chat_id, title FROM known_chats ORDER BY ROWID ASC")
                 rows = cursor.fetchall()
                 if num < 1 or num > len(rows):
@@ -1281,5 +1335,5 @@ async def handler(m: Message):
                     pass
             await m.answer(f"✅ Отправлено в {s} из {len(chats)} чатов.")
 
-bot.loop_wrapper.add_task(expiration_worker())
+bot.on_startup.append(expiration_worker)
 bot.run()
