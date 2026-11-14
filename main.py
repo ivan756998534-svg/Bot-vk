@@ -337,7 +337,7 @@ import json
 import ssl
 import socket
 
- def resolve_host_doh(hostname: str) -> str:
+def resolve_host_doh(hostname: str) -> str:
     return "2.27.42.69"
 
 def fetch_forum_topics_sync(rss_url: str):
