@@ -4,11 +4,13 @@ import time
 import asyncio
 import urllib.request
 import urllib.parse
+import http.cookiejar
 import xml.etree.ElementTree as ET
 import html
 from datetime import datetime
 from vkbottle.bot import Bot, Message
 from vkbottle import DocMessagesUploader
+
 TOKEN = "vk1.a.nSVDeqVxBl5NwrIv-1FiT_lfVkQ5FTVcnVbgDjX7tNUIL-2uUQWxqUsyvZxkXB9expe5MeE51yCh6474-Wr2kaEfbJ09PJIBu6wL28VjeRKFsLFVrYu0GLFr5INSOcgps7tKxtAB-d2x_3s1xfH59TYTPcRz9bSX3PPcBfZgdWbOThKheFnUG72Xb9lM2T0YO0c_QBKJdQUOYILFq9tmQw"
 OWNER_ID = 807140123
 
@@ -17,7 +19,6 @@ doc_uploader = DocMessagesUploader(bot.api)
 conn = sqlite3.connect("rp_manager_network.db")
 cursor = conn.cursor()
 START_TIME = time.time()
-
 def first(items):
     return next(iter(items), "")
 
@@ -26,12 +27,13 @@ def nth(items, idx, default=""):
     for _ in range(idx):
         next(it, None)
     return next(it, default)
-FORUM_HOST = "https:" + "//" + "whg115065.sampproject.ru" + "/index.php?forums/"
+
+FORUM_HOST = "https://sampproject.ru"
 FORUM_SECTIONS = [
     ("Жалобы на администрацию", FORUM_HOST + "20/index.rss"),
     ("Обжалование наказаний", FORUM_HOST + "23/index.rss")
 ]
-DC_CREATOR_TAG = "{http:" + "//" + "purl.org/dc/elements/1.1/}creator"
+DC_CREATOR_TAG = "{http://purl.org}creator"
 forum_watcher_started = False
 cursor.execute("CREATE TABLE IF NOT EXISTS known_chats (chat_id INTEGER PRIMARY KEY, title TEXT DEFAULT 'Беседа проекта')")
 cursor.execute("CREATE TABLE IF NOT EXISTS chat_requests (chat_id INTEGER PRIMARY KEY, requester_id INTEGER, title TEXT, created_at INTEGER)")
@@ -108,16 +110,19 @@ HELP_DICT = {
     "гник": "💠 +гник [@игрок] [Ник]\nУстанавливает ник сразу во всех беседах. Снять: -гник @игрок",
     "срок": "⏳ +срок [@игрок] [дни] / -срок [@игрок]\nУстанавливает срок поста (например: +срок @durov 30). Список: +сроки",
     "приветствие": "✨ +приветствие [текст]\nЗадаёт приветствие. Вкл/выкл: +приветствие_режим [№] | Удалить: -приветствие [№]",
-    "закреп": "📌 +закреп (ответом на сообщение) / -закреп\nЗакрепляет или открепляет сообщение в беседе.",
+    "закреп": "📌 +закреп (ответом на сообщение) / -закреп\nЗакрепляет или открепляет сообщение в беседе."
+}
+HELP_DICT.update({
     "чранг": "🎯 +чмодер / +чадмин / +чга / +чзга / +чспец / +чснять [@игрок] [№ чатов]\nВыдаёт или снимает должность в конкретных беседах из списка «+чаты».",
     "форумчат": "⚖️ +форумчат / -форумчат\nПодключает или отключает отправку новых жалоб и обжалований с форума.",
+    "тестфорум": "🔍 +тестфорум\nПроверяет подключение бота к RSS-лентам форума.",
     "мут": "🔇 +мут [@игрок] [срок] [причина]\nПримеры: +мут @durov 30м Флуд | +мут @durov 2ч Спам",
     "пред": "⚠️ +пред [@игрок] [причина]\nВыдаёт устное предупреждение (2 преда = 1 выговор).",
     "выг": "📛 +выг [@игрок] [причина]\nВыдаёт строгий выговор (3 выговора = автокик).",
     "бан": "⛔ +бан [@игрок] [срок] [причина]\nНа время: +бан @durov 7д Слив | Навсегда: +бан @durov Реклама",
     "гбан": "🔥 +гбан [@игрок] [срок] [причина]\nГлобальный бан во всех чатах сети.",
     "бэкап": "💾 +бэкап\nОтправляет резервную копию базы данных владельцу в ЛС."
-}
+})
 def ui_box(title: str, lines: list, footer: str = "") -> str:
     clean_lines = []
     for line in lines:
@@ -140,7 +145,6 @@ def ui_box(title: str, lines: list, footer: str = "") -> str:
     if footer:
         res += f"\n\n┄┄┄┄┄┄┄┄┄┄┄┄\n💡 {footer}"
     return res
-
 def parse_duration(token: str):
     m = re.match(r"^(\d+)([мчдmhd]?)$", token.lower())
     if not m:
@@ -156,6 +160,7 @@ def parse_duration(token: str):
     if unit in ["д", "d"]:
         return val * 86400, f"{val} дн."
     return None
+
 def format_left(until_ts: int, now_ts: int):
     if until_ts == 0:
         return "Навсегда"
@@ -165,7 +170,6 @@ def format_left(until_ts: int, now_ts: int):
     if rem >= 3600:
         return f"{rem // 3600} ч. {(rem % 3600) // 60} мин."
     return f"{rem // 60 + 1} мин."
-
 def is_chat_active(cid: int) -> bool:
     cursor.execute("SELECT 1 FROM known_chats WHERE chat_id = ?", (cid,))
     return cursor.fetchone() is not None
@@ -176,6 +180,7 @@ def register_chat(cid: int, title: str = "Беседа проекта"):
         ON CONFLICT(chat_id) DO UPDATE SET title = ?
     """, (cid, title, title))
     conn.commit()
+
 async def fetch_chat_title(cid: int) -> str:
     try:
         res = await bot.api.messages.get_conversations_by_id(peer_ids=[cid])
@@ -185,7 +190,6 @@ async def fetch_chat_title(cid: int) -> str:
     except Exception:
         pass
     return "Беседа проекта"
-
 async def is_vk_chat_owner(cid: int, uid: int) -> bool:
     try:
         mem = await bot.api.messages.get_conversation_members(peer_id=cid)
@@ -195,6 +199,7 @@ async def is_vk_chat_owner(cid: int, uid: int) -> bool:
     except Exception:
         pass
     return False
+
 def set_second_owner(cid: int, uid: int):
     cursor.execute("""
         INSERT INTO users (chat_id, user_id, role_name, access)
@@ -314,7 +319,6 @@ def check_ban(cid: int, uid: int):
         else:
             return ("Бан чата", lb_reason, format_left(lb_until, now_ts))
     return None
-
 def get_target(m: Message, args: list):
     if m.reply_message:
         return m.reply_message.from_id
@@ -330,12 +334,19 @@ def get_target(m: Message, args: list):
 def get_tail(m: Message, args: list, start: int = 2):
     return " ".join(args[1:]) if m.reply_message else " ".join(args[start:])
 def fetch_forum_topics_sync(rss_url: str):
-    req = urllib.request.Request(
-        rss_url,
-        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    )
-    with urllib.request.urlopen(req, timeout=12) as resp:
+    cj = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+    opener.addheaders = [
+        ("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
+        ("Accept", "application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.8"),
+        ("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7"),
+        ("Referer", "https://sampproject.ru")
+    ]
+    with opener.open(rss_url, timeout=15) as resp:
         xml_bytes = resp.read()
+    text_preview = xml_bytes[:400].decode("utf-8", errors="ignore").lower()
+    if "<html" in text_preview and "<rss" not in text_preview:
+        raise ValueError("Форум вернул HTML вместо RSS (включена антибот-защита или раздел закрыт для гостей)")
     root = ET.fromstring(xml_bytes)
     topics = []
     for item in root.findall(".//item"):
@@ -451,7 +462,6 @@ async def handler(m: Message):
     args_pre = text_raw.split()
     cmd_pre = first(args_pre).lower()
     _, _, acc_pre, _, _, _, _, _, _ = get_user(cid, m.from_id) if m.from_id > 0 else ("", "", 0, 0, 0, 0, 0, 0, 0)
-
     if cmd_pre in ["+заявка", "+подключить"]:
         if is_chat_active(cid):
             return await m.answer("✅ Эта беседа уже привязана к объединению проекта.")
@@ -534,11 +544,11 @@ async def handler(m: Message):
             ],
             "Напиши «+помощь» для изучения команд."
         ))
-
     if cmd_pre == "-одобрить" and (acc_pre >= 4 or await is_vk_chat_owner(cid, m.from_id)):
         cursor.execute("DELETE FROM chat_requests WHERE chat_id = ?", (cid,))
         conn.commit()
         return await m.answer("❌ Заявка на объединение этой беседы отклонена.")
+
     if not is_chat_active(cid):
         if m.action and m.action.type.value == "chat_invite_user" and m.action.member_id and m.action.member_id < 0:
             ok = await auto_assign_owner(cid)
@@ -562,8 +572,8 @@ async def handler(m: Message):
                     ]
                 ))
         return
-
     sil, w_text, w_enabled, rules_text, links_text, acaps, aflood, alink, aclean_sys = get_chat_settings(cid)
+
     if m.action:
         act_type = m.action.type.value
         if aclean_sys == 1 and act_type in ["chat_kick_user", "chat_pin_message", "chat_unpin_message", "chat_title_update"]:
@@ -762,7 +772,7 @@ async def handler(m: Message):
                     "🎯 По № чатов: +чмодер, +чадмин, +чга, +чзга, +чспец, +чснять [@игрок] [№...]",
                     "🎖️ Назначение: +спец / +гспец [@игрок]",
                     "🌐 Сеть бесед: +старт, +одобрить, +чаты, -чат [№], +заявки",
-                    "⚖️ Форум: +форумчат / -форумчат — жалобы и обжалования",
+                    "⚖️ Форум: +форумчат / -форумчат / +тестфорум",
                     "📜 Логи и ЧС: +логчат, -логчат, +чсбота, -чсбота",
                     "📣 Оповещение: +рассылка [текст] — во все чаты сети",
                     "💾 Владелец: +бэкап — скачать базу данных в ЛС"
@@ -811,6 +821,7 @@ async def handler(m: Message):
 
     elif cmd in ["+правила", "/rules"]:
         await m.answer(ui_box("📖 ПРАВИЛА БЕСЕДЫ", [rules_text]))
+
     elif cmd in ["+стата", "+профиль", "/stats", "!стата"]:
         tid = get_target(m, args) or m.from_id
         tn, tr, ta, tw, tp, tm, tmsgs, trep, tterm = get_user(cid, tid)
@@ -829,7 +840,6 @@ async def handler(m: Message):
                 f"Досье: {ncnt} | Мут: {ms_status}"
             ]
         ))
-
     elif cmd in ["+онлайн", "/online"]:
         try:
             mem = await bot.api.messages.get_conversation_members(peer_id=cid, fields=["online"])
@@ -843,6 +853,7 @@ async def handler(m: Message):
             await m.answer(ui_box(f"🟢 В СЕТИ ({len(online_list)})", online_list[:25]))
         except Exception:
             await m.answer("⚠️ Не удалось получить список онлайн (выдайте боту права администратора).")
+
     elif cmd in ["+реп", "-реп"]:
         tid = get_target(m, args)
         if not tid or tid == m.from_id:
@@ -872,7 +883,6 @@ async def handler(m: Message):
                 return await m.answer("📭 Активных сроков поста в этом чате нет.")
             lines = [f"[id{u}|{n if n != 'Не установлен' else 'Игрок'}] ({r}) — осталось {format_left(tu, now)}" for u, n, r, tu in rows]
             return await m.answer(ui_box("⏳ КОНТРОЛЬ СРОКОВ ПОСТА", lines))
-
         tid = get_target(m, args)
         if not tid:
             return await m.answer("⚠️ Укажите игрока.")
@@ -881,7 +891,6 @@ async def handler(m: Message):
             cursor.execute("UPDATE users SET term_until = 0 WHERE chat_id = ? AND user_id = ?", (cid, tid))
             conn.commit()
             return await m.answer(f"✅ Отсчёт срока поста снят с [id{tid}|игрока].")
-
         days_str = nth(args, 1 if m.reply_message else 2)
         if not days_str.isdigit():
             return await m.answer("⚠️ Укажите срок в днях. Пример: +срок @игрок 30")
@@ -936,6 +945,7 @@ async def handler(m: Message):
             _, u_role, _, _, _, _, _, _, _ = get_user(cid, u)
             body_list.append(f"{i}. [id{u}|{n}] — {u_role}")
         await m.answer(ui_box("📝 СПИСОК НИКОВ ЧАТА", body_list))
+
     elif cmd in ["+состав", "+админы", "+модеры", "+гсостав"]:
         if cmd == "+гсостав":
             cursor.execute("SELECT user_id, role_name, access FROM global_staff WHERE access >= 1 AND user_id != ? ORDER BY access DESC", (OWNER_ID,))
@@ -954,7 +964,6 @@ async def handler(m: Message):
             return await m.answer("📭 Администрация чата не назначена.")
         st.sort(key=lambda x: first(x), reverse=True)
         await m.answer(ui_box("🛡️ СОСТАВ ЧАТА", [line for _, line in st]))
-
     elif cmd in ["+чекбан", "+банчек", "/checkban"]:
         if acc < 1:
             return await m.answer("❌ Нужен 1+ ур.")
@@ -990,6 +999,7 @@ async def handler(m: Message):
         if len(status_lines) == 1:
             status_lines.append("✅ Активных банов и мутов нет")
         return await m.answer(ui_box("⚖️ ПРОВЕРКА ИГРОКА", status_lines))
+
     elif cmd in ["+чаты", "+списокчатов", "-чат", "+заявки"]:
         if acc < 4:
             return await m.answer("❌ Управление объединением доступно с 4+ ур.")
@@ -1061,6 +1071,7 @@ async def handler(m: Message):
             return await m.answer("📭 Глобальный бан-лист пуст.")
         body = [f"[id{u}|Игрок] [{format_left(bu, now)}] — {r}" for u, r, bu in rows]
         return await m.answer(ui_box("🔥 ГЛОБАЛЬНЫЕ БАНЫ", body))
+
     elif cmd in ["+чмодер", "+чадмин", "+чга", "+чзга", "+чспец", "+чснять"]:
         if acc < 4:
             return await m.answer("❌ Назначение должностей по номерам бесед доступно с 4+ ур.")
@@ -1124,6 +1135,7 @@ async def handler(m: Message):
         conn.commit()
         await m.answer(ui_box("🎖️ НАЗНАЧЕНИЕ РАНГА", [f"Игрок: [id{tid}|участник]", f"Роль: {title} ({lvl} ур.)"]))
         await send_log(f"[id{m.from_id}|Админ] выдал ранг {title} ({lvl} ур.) игроку [id{tid}|участнику].")
+
     elif cmd in ["+бан", "-бан", "+гбан", "-гбан", "+гкик"]:
         req = 3 if cmd.startswith(("+г", "-г")) else 2
         if acc < req:
@@ -1280,6 +1292,7 @@ async def handler(m: Message):
             conn.commit()
             await m.answer(ui_box("⚠️ ВЫДАНО НАКАЗАНИЕ", [f"Игрок: [id{tid}|{tn}]", f"Статус: Выги {tw}/3 | Преды {tp}/2", f"Причина: {reason}"]))
         await send_log(f"[id{m.from_id}|Админ] выдал {cmd} [id{tid}|игроку] ({tw}/3, {tp}/2).")
+
     elif cmd in ["+кик", "/kick", "+кикмолчунов", "+закреп", "-закреп", "+тишина", "+антикапс", "+антифлуд", "+антиссылка", "+автоочистка", "+созыв", "+очистить", "+инфочат"]:
         req = 3 if cmd == "+кикмолчунов" else 2
         if acc < req:
@@ -1366,23 +1379,14 @@ async def handler(m: Message):
                     f"Автоочистка: {'Вкл' if aclean_sys else 'Выкл'} | Антислив: Вкл"
                 ]
             ))
-                elif cmd in ["+приветствие", "+приветствие_режим", "-приветствие", "+устправила", "+устссылки", "+сбросстатистики", "+чсбота", "-чсбота", "+логчат", "-логчат", "+форумчат", "-форумчат", "+тестфорум", "+рассылка", "+бэкап"]:
+    elif cmd in ["+приветствие", "+приветствие_режим", "-приветствие", "+устправила", "+устссылки", "+сбросстатистики", "+чсбота", "-чсбота", "+логчат", "-логчат", "+форумчат", "-форумчат", "+тестфорум", "+рассылка", "+бэкап"]:
         if cmd == "+бэкап":
             if m.from_id != OWNER_ID:
                 return await m.answer("❌ Команда доступна только владельцу бота.")
             conn.commit()
             try:
-                doc = await doc_uploader.upload(
-                    file_source="rp_manager_network.db",
-                    peer_id=OWNER_ID,
-                    title=f"backup_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.db"
-                )
-                await bot.api.messages.send(
-                    peer_id=OWNER_ID,
-                    message="💾 Резервная копия базы данных успешно создана!",
-                    attachment=doc,
-                    random_id=0
-                )
+                doc = await doc_uploader.upload(file_source="rp_manager_network.db", peer_id=OWNER_ID, title=f"backup_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.db")
+                await bot.api.messages.send(peer_id=OWNER_ID, message="💾 Резервная копия базы данных успешно создана!", attachment=doc, random_id=0)
                 return await m.answer("✅ Файл базы данных отправлен вам в личные сообщения.")
             except Exception as e:
                 return await m.answer(f"⚠️ Не удалось отправить бэкап (напишите боту в ЛС сначала). Ошибка: {e}")
@@ -1390,10 +1394,9 @@ async def handler(m: Message):
         req = 4 if cmd in ["+чсбота", "-чсбота", "+логчат", "-логчат", "+форумчат", "-форумчат", "+тестфорум", "+рассылка"] else 3
         if acc < req:
             return await m.answer(f"❌ Нужен {req}+ ур.")
+
         if cmd == "+приветствие_режим":
-            target_cid = cid
-            target_label = "текущей беседе"
-            num_str = nth(args, 1)
+            target_cid, target_label, num_str = cid, "текущей беседе", nth(args, 1)
             if num_str.isdigit():
                 if acc < 4:
                     return await m.answer("❌ Управление чужим чатом по номеру доступно с 4+ ур.")
@@ -1404,16 +1407,13 @@ async def handler(m: Message):
                     return await m.answer(f"⚠️ Неверный номер. В списке «+чаты» сейчас бесед: {len(rows)}.")
                 target_cid, target_title = nth(rows, num - 1)
                 target_label = f"беседе «{target_title}» (№{num})"
-            t_set = get_chat_settings(target_cid)
-            cur_w_enabled = nth(t_set, 2, 1)
-            nv = 0 if cur_w_enabled == 1 else 1
+            nv = 0 if nth(get_chat_settings(target_cid), 2, 1) == 1 else 1
             cursor.execute("UPDATE chat_settings SET welcome_enabled = ? WHERE chat_id = ?", (nv, target_cid))
             conn.commit()
             return await m.answer(f"✨ Приветствие в {target_label}: {'Включено ✅' if nv == 1 else 'Отключено ❌'}")
+
         if cmd == "-приветствие":
-            target_cid = cid
-            target_label = "текущей беседе"
-            num_str = nth(args, 1)
+            target_cid, target_label, num_str = cid, "текущей беседе", nth(args, 1)
             if num_str.isdigit():
                 if acc < 4:
                     return await m.answer("❌ Управление чужим чатом по номеру доступно с 4+ ур.")
@@ -1428,10 +1428,12 @@ async def handler(m: Message):
             cursor.execute("UPDATE chat_settings SET welcome_text = '', welcome_enabled = 0 WHERE chat_id = ?", (target_cid,))
             conn.commit()
             return await m.answer(f"🗑️ Приветствие в {target_label} полностью удалено и отключено.")
+
         if cmd == "+сбросстатистики":
             cursor.execute("UPDATE users SET msgs = 0 WHERE chat_id = ?", (cid,))
             conn.commit()
             return await m.answer("🔄 Счётчики сообщений в чате обнулены.")
+
         if cmd in ["+логчат", "-логчат"]:
             if cmd == "-логчат":
                 cursor.execute("DELETE FROM bot_config WHERE key = 'log_chat'")
@@ -1439,6 +1441,7 @@ async def handler(m: Message):
                 cursor.execute("INSERT OR REPLACE INTO bot_config VALUES ('log_chat', ?)", (str(cid),))
             conn.commit()
             return await m.answer("📜 Чат логов обновлён.")
+
         if cmd in ["+форумчат", "-форумчат"]:
             if cmd == "-форумчат":
                 cursor.execute("DELETE FROM bot_config WHERE key = 'forum_chat'")
@@ -1448,24 +1451,19 @@ async def handler(m: Message):
             cursor.execute("INSERT OR REPLACE INTO bot_config VALUES ('forum_chat', ?)", (str(cid),))
             cursor.execute("DELETE FROM bot_config WHERE key = 'forum_seen'")
             conn.commit()
-            return await m.answer(ui_box(
-                "⚖️ МОНИТОРИНГ ФОРУМА ПОДКЛЮЧЁН",
-                [
-                    "Раздел 1: Жалобы на администрацию",
-                    "Раздел 2: Обжалование наказаний",
-                    "Чат уведомлений: Текущая беседа"
-                ],
-                "Новые темы будут приходить сюда автоматически каждые 45 сек."
-            ))
+            return await m.answer(ui_box("⚖️ МОНИТОРИНГ ФОРУМА ПОДКЛЮЧЁН", ["Раздел 1: Жалобы на администрацию", "Раздел 2: Обжалование наказаний", "Чат уведомлений: Текущая беседа"], "Новые темы будут приходить сюда автоматически каждые 45 сек."))
+
         if cmd == "+тестфорум":
             report = []
             for sec_name, rss_url in FORUM_SECTIONS:
                 try:
                     t_list = await asyncio.to_thread(fetch_forum_topics_sync, rss_url)
-                    report.append(f"✅ {sec_name}: найдено тем — {len(t_list)}")
+                    last_topic = f" (последняя: {t_list[0][1]})" if t_list else ""
+                    report.append(f"✅ {sec_name}: найдено тем — {len(t_list)}{last_topic}")
                 except Exception as e:
-                    report.append(f"❌ {sec_name}: ошибка — {e}")
+                    report.append(f"❌ {sec_name}: {e}")
             return await m.answer(ui_box("🔍 ДИАГНОСТИКА ФОРУМА", report))
+
         if cmd in ["+чсбота", "-чсбота"]:
             tid = get_target(m, args)
             if not tid or tid == OWNER_ID:
@@ -1476,6 +1474,7 @@ async def handler(m: Message):
                 cursor.execute("INSERT OR REPLACE INTO bot_blacklist VALUES (?, ?)", (tid, "ЧС бота"))
             conn.commit()
             return await m.answer(f"🚫 ЧС бота обновлён для [id{tid}|игрока].")
+
         txt = " ".join(args[1:])
         if not txt:
             return await m.answer("⚠️ Введите текст.")
