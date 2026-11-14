@@ -2,6 +2,10 @@ import sqlite3
 import re
 import time
 import asyncio
+import urllib.request
+import urllib.parse
+import xml.etree.ElementTree as ET
+import html
 from datetime import datetime
 from vkbottle.bot import Bot, Message
 from vkbottle import DocMessagesUploader
@@ -16,6 +20,19 @@ START_TIME = time.time()
 
 def first(items):
     return next(iter(items), "")
+
+def nth(items, idx, default=""):
+    it = iter(items)
+    for _ in range(idx):
+        next(it, None)
+    return next(it, default)
+FORUM_HOST = "https://sampproject.ru"
+FORUM_SECTIONS = [
+    ("Жалобы на администрацию", FORUM_HOST + urllib.parse.quote("Жалобы-на-администрацию") + ".20/index.rss"),
+    ("Обжалование наказаний", FORUM_HOST + urllib.parse.quote("Обжалование-наказаний") + ".23/index.rss")
+]
+DC_CREATOR_TAG = "{http://purl.org}creator"
+forum_watcher_started = False
 cursor.execute("CREATE TABLE IF NOT EXISTS known_chats (chat_id INTEGER PRIMARY KEY, title TEXT DEFAULT 'Беседа проекта')")
 cursor.execute("CREATE TABLE IF NOT EXISTS chat_requests (chat_id INTEGER PRIMARY KEY, requester_id INTEGER, title TEXT, created_at INTEGER)")
 cursor.execute("CREATE TABLE IF NOT EXISTS global_staff (user_id INTEGER PRIMARY KEY, role_name TEXT DEFAULT 'Участник', access INTEGER DEFAULT 0)")
@@ -66,7 +83,6 @@ for q in migrations:
     except Exception:
         pass
 conn.commit()
-
 last_msg_time = {}
 admin_actions_log = {}
 
@@ -76,21 +92,30 @@ LINK_PATTERN = re.compile(
     r"\b[a-zA-Z0-9а-яё-]{2,}\.(?:ru|com|net|org|me|gg|io|xyz|info|biz|su|рф|online|site|store|top|club|pro|link|tk|ml|ga|cf|kz|by|ua)\b)",
     re.IGNORECASE
 )
+
+BOLD_MAP = str.maketrans(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+    "𝗔𝗕𝗖𝗗𝗘𝗙𝗚𝗛𝗜𝗝𝗞𝗟𝗠𝗡𝗢𝗣𝗤𝗥𝗦𝗧𝗨𝗩𝗪𝗫𝗬𝗭𝗮𝗯𝗰𝗱𝗲𝗳𝗴𝗵𝗶𝗷𝗸𝗹𝗺𝗻𝗼𝗽𝗾𝗿𝘀𝘁𝘂𝘃𝘄𝘅𝘆𝘇𝟬𝟭𝟮𝟯𝟰𝟱𝟲𝟳𝟴𝟵"
+)
+
+def to_bold(text: str) -> str:
+    return text.translate(BOLD_MAP)
 HELP_DICT = {
     "старт": "🚀 +старт (или /start)\nАктивирует бота в беседе (для создателя чата или 4–5 ранга).",
-    "стата": "📊 +стата [@игрок]\nПрофиль игрока: ник, должность, срок, актив и наказания.",
-    "ссылки": "🔗 +ссылки (или +форум)\nПоказывает важные ссылки проекта. Изменить: +устссылки [текст]",
-    "ник": "🏷 +ник [@игрок] [Ник]\nУстанавливает игровой ник участнику в текущей беседе.",
-    "гник": "🌐 +гник [@игрок] [Ник]\nУстанавливает ник сразу во всех беседах. Снять: -гник @игрок",
+    "стата": "💎 +стата [@игрок]\nПрофиль игрока: ник, должность, срок, актив и наказания.",
+    "ссылки": "🌐 +ссылки (или +форум)\nПоказывает важные ссылки проекта. Изменить: +устссылки [текст]",
+    "ник": "🏷️ +ник [@игрок] [Ник]\nУстанавливает игровой ник участнику в текущей беседе.",
+    "гник": "💠 +гник [@игрок] [Ник]\nУстанавливает ник сразу во всех беседах. Снять: -гник @игрок",
     "срок": "⏳ +срок [@игрок] [дни] / -срок [@игрок]\nУстанавливает срок поста (например: +срок @durov 30). Список: +сроки",
-    "приветствие": "👋 +приветствие [текст]\nЗадаёт приветствие. Вкл/выкл: +приветствие_режим [№] | Удалить: -приветствие [№]",
+    "приветствие": "✨ +приветствие [текст]\nЗадаёт приветствие. Вкл/выкл: +приветствие_режим [№] | Удалить: -приветствие [№]",
     "закреп": "📌 +закреп (ответом на сообщение) / -закреп\nЗакрепляет или открепляет сообщение в беседе.",
     "чранг": "🎯 +чмодер / +чадмин / +чга / +чзга / +чспец / +чснять [@игрок] [№ чатов]\nВыдаёт или снимает должность в конкретных беседах из списка «+чаты».",
+    "форумчат": "⚖️ +форумчат / -форумчат\nПодключает или отключает отправку новых жалоб и обжалований с форума.",
     "мут": "🔇 +мут [@игрок] [срок] [причина]\nПримеры: +мут @durov 30м Флуд | +мут @durov 2ч Спам",
     "пред": "⚠️ +пред [@игрок] [причина]\nВыдаёт устное предупреждение (2 преда = 1 выговор).",
     "выг": "📛 +выг [@игрок] [причина]\nВыдаёт строгий выговор (3 выговора = автокик).",
     "бан": "⛔ +бан [@игрок] [срок] [причина]\nНа время: +бан @durov 7д Слив | Навсегда: +бан @durov Реклама",
-    "гбан": "🌐 +гбан [@игрок] [срок] [причина]\nГлобальный бан во всех чатах сети.",
+    "гбан": "🔥 +гбан [@игрок] [срок] [причина]\nГлобальный бан во всех чатах сети.",
     "бэкап": "💾 +бэкап\nОтправляет резервную копию базы данных владельцу в ЛС."
 }
 def ui_box(title: str, lines: list, footer: str = "") -> str:
@@ -100,14 +125,20 @@ def ui_box(title: str, lines: list, footer: str = "") -> str:
             continue
         if line.startswith("\n"):
             clean_lines.append(line)
-        elif line.startswith(("•", "▸", "—", "👤", "🛡", "⚔️", "👑", "🎯", "🌐", "📌", "👋", "⛔", "🔇", "⚠️", "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "10.")):
-            clean_lines.append(line)
+            continue
+        formatted = line
+        if ":" in line and not line.startswith(("http", "[id", "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "10.")):
+            head, tail = line.split(":", 1)
+            if len(head) <= 28:
+                formatted = f"«{head}»:{tail}"
+        if formatted.startswith(("•", "▸", "—", "🔹", "🔸", "👤", "🛡️", "⚖️", "👑", "⚜️", "🎯", "🌐", "📌", "✨", "⛔", "🔇", "⚠️", "🔥", "💎", "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9.", "10.")):
+            clean_lines.append(formatted)
         else:
-            clean_lines.append(f"▸ {line}")
+            clean_lines.append(f"🔹 {formatted}")
     body = "\n".join(clean_lines)
-    res = f"◈ {title} ◈\n\n{body}"
+    res = f"【 {to_bold(title)} 】\n\n{body}"
     if footer:
-        res += f"\n\n──────────\n💡 {footer}"
+        res += f"\n\n┄┄┄┄┄┄┄┄┄┄┄┄\n💡 {footer}"
     return res
 
 def parse_duration(token: str):
@@ -164,17 +195,6 @@ async def is_vk_chat_owner(cid: int, uid: int) -> bool:
     except Exception:
         pass
     return False
-import urllib.request
-import urllib.parse
-import xml.etree.ElementTree as ET
-import html
-
-FORUM_SECTIONS = [
-    ("Жалобы на администрацию", "https://sampproject.ru" + urllib.parse.quote("Жалобы-на-администрацию") + ".20/index.rss"),
-    ("Обжалование наказаний", "https://sampproject.ru" + urllib.parse.quote("Обжалование-наказаний") + ".23/index.rss")
-]
-forum_watcher_started = False
-
 def set_second_owner(cid: int, uid: int):
     cursor.execute("""
         INSERT INTO users (chat_id, user_id, role_name, access)
@@ -182,6 +202,7 @@ def set_second_owner(cid: int, uid: int):
         ON CONFLICT(chat_id, user_id) DO UPDATE SET role_name = 'Второй владелец', access = 5
     """, (cid, uid))
     conn.commit()
+
 async def auto_assign_owner(cid: int):
     try:
         mem = await bot.api.messages.get_conversation_members(peer_id=cid)
@@ -192,7 +213,6 @@ async def auto_assign_owner(cid: int):
     except Exception:
         pass
     return False
-
 def get_chat_settings(cid: int):
     cursor.execute("""
         SELECT silence, welcome_text, welcome_enabled, rules_text, links_text, anticaps, antiflood, antilink, autoclean_sys
@@ -204,13 +224,13 @@ def get_chat_settings(cid: int):
         conn.commit()
         return (0, "Добро пожаловать в беседу!", 1, "Правила не установлены.", "Ссылки проекта ещё не установлены.", 0, 0, 0, 1)
     return r
+
 def get_global(uid: int):
     if uid == OWNER_ID:
         return ("Второй владелец", 5)
     cursor.execute("SELECT role_name, access FROM global_staff WHERE user_id = ?", (uid,))
     r = cursor.fetchone()
     return r if r else ("Участник", 0)
-
 def get_user(cid: int, uid: int):
     cursor.execute("""
         SELECT nickname, role_name, access, warns, preds, mute_until, msgs, rep, term_until
@@ -298,7 +318,7 @@ def check_ban(cid: int, uid: int):
 def get_target(m: Message, args: list):
     if m.reply_message:
         return m.reply_message.from_id
-    target_arg = first(args[1:])
+    target_arg = nth(args, 1)
     if target_arg:
         match = re.search(r"\[id(\d+)\|", target_arg)
         if match:
@@ -322,7 +342,7 @@ def fetch_forum_topics_sync(rss_url: str):
         title_el = item.find("title")
         link_el = item.find("link")
         guid_el = item.find("guid")
-        creator_el = item.find("{http://purl.org}creator")
+        creator_el = item.find(DC_CREATOR_TAG)
         if title_el is not None and link_el is not None:
             t_title = html.unescape((title_el.text or "").strip())
             t_link = (link_el.text or "").strip()
@@ -667,7 +687,7 @@ async def handler(m: Message):
         if cursor.fetchone():
             return
     if cmd in ["/help", "!помощь", "/помощь", "+помощь", "+команды"]:
-        sub = first(args[1:]).lower().lstrip("+/-!")
+        sub = nth(args, 1).lower().lstrip("+/-!")
         if sub in HELP_DICT:
             return await m.answer(ui_box("📖 СПРАВКА ПО КОМАНДЕ", [HELP_DICT[sub]]))
         if sub == "игрок":
@@ -862,7 +882,7 @@ async def handler(m: Message):
             conn.commit()
             return await m.answer(f"✅ Отсчёт срока поста снят с [id{tid}|игрока].")
 
-        days_str = first(args[1:]) if m.reply_message else first(args[2:])
+        days_str = nth(args, 1 if m.reply_message else 2)
         if not days_str.isdigit():
             return await m.answer("⚠️ Укажите срок в днях. Пример: +срок @игрок 30")
         days = int(days_str)
@@ -981,7 +1001,7 @@ async def handler(m: Message):
             lines = [f"{idx_c}. {c_title}{' (текущая)' if c_id == cid else ''}" for idx_c, (c_id, c_title) in enumerate(rows, 1)]
             return await m.answer(ui_box("🌐 ОБЪЕДИНЁННЫЕ БЕСЕДЫ", lines, "Открепить: -чат [номер из списка]"))
         if cmd == "-чат":
-            num_str = first(args[1:])
+            num_str = nth(args, 1)
             if not num_str.isdigit():
                 return await m.answer("⚠️ Укажите номер беседы из списка «+чаты».")
             num = int(num_str)
@@ -989,7 +1009,7 @@ async def handler(m: Message):
             rows = cursor.fetchall()
             if num < 1 or num > len(rows):
                 return await m.answer(f"⚠️ Неверный номер. В списке сейчас бесед: {len(rows)}.")
-            target_cid, target_title = rows[num - 1]
+            target_cid, target_title = nth(rows, num - 1)
             cursor.execute("DELETE FROM known_chats WHERE chat_id = ?", (target_cid,))
             conn.commit()
             await send_log(f"[id{m.from_id}|Админ] открепил беседу «{target_title}» (ID: {target_cid}).")
@@ -1063,7 +1083,7 @@ async def handler(m: Message):
             if n < 1 or n > len(all_chats):
                 skipped.append(f"№{n} (не найден)")
                 continue
-            t_cid, t_title = all_chats[n - 1]
+            t_cid, t_title = nth(all_chats, n - 1)
             _, _, cur_l_acc, _, _, _, _, _, _ = get_user(t_cid, tid)
             if cur_l_acc >= acc and m.from_id != OWNER_ID:
                 skipped.append(f"№{n} (ранг выше)")
@@ -1129,7 +1149,7 @@ async def handler(m: Message):
         idx_start = 1 if m.reply_message else 2
         ban_until = 0
         dur_label = "Навсегда"
-        dur_token = first(args[idx_start:])
+        dur_token = nth(args, idx_start)
         if cmd in ["+бан", "+гбан"] and dur_token:
             parsed = parse_duration(dur_token)
             if parsed:
@@ -1208,7 +1228,7 @@ async def handler(m: Message):
             conn.commit()
             return await m.answer("🔊 Мут снят.")
         idx = 1 if m.reply_message else 2
-        dur_token = first(args[idx:])
+        dur_token = nth(args, idx)
         if not dur_token:
             return await m.answer("⚠️ Пример: +мут @игрок 30м Флуд (или 2ч / 1д)")
         parsed = parse_duration(dur_token)
@@ -1373,7 +1393,7 @@ async def handler(m: Message):
         if cmd == "+приветствие_режим":
             target_cid = cid
             target_label = "текущей беседе"
-            num_str = first(args[1:])
+            num_str = nth(args, 1)
             if num_str.isdigit():
                 if acc < 4:
                     return await m.answer("❌ Управление чужим чатом по номеру доступно с 4+ ур.")
@@ -1382,17 +1402,18 @@ async def handler(m: Message):
                 rows = cursor.fetchall()
                 if num < 1 or num > len(rows):
                     return await m.answer(f"⚠️ Неверный номер. В списке «+чаты» сейчас бесед: {len(rows)}.")
-                target_cid, target_title = rows[num - 1]
+                target_cid, target_title = nth(rows, num - 1)
                 target_label = f"беседе «{target_title}» (№{num})"
             t_set = get_chat_settings(target_cid)
-            nv = 0 if t_set == 1 else 1
+            cur_w_enabled = nth(t_set, 2, 1)
+            nv = 0 if cur_w_enabled == 1 else 1
             cursor.execute("UPDATE chat_settings SET welcome_enabled = ? WHERE chat_id = ?", (nv, target_cid))
             conn.commit()
             return await m.answer(f"✨ Приветствие в {target_label}: {'Включено ✅' if nv == 1 else 'Отключено ❌'}")
         if cmd == "-приветствие":
             target_cid = cid
             target_label = "текущей беседе"
-            num_str = first(args[1:])
+            num_str = nth(args, 1)
             if num_str.isdigit():
                 if acc < 4:
                     return await m.answer("❌ Управление чужим чатом по номеру доступно с 4+ ур.")
@@ -1401,7 +1422,7 @@ async def handler(m: Message):
                 rows = cursor.fetchall()
                 if num < 1 or num > len(rows):
                     return await m.answer(f"⚠️ Неверный номер. В списке «+чаты» сейчас бесед: {len(rows)}.")
-                target_cid, target_title = rows[num - 1]
+                target_cid, target_title = nth(rows, num - 1)
                 target_label = f"беседе «{target_title}» (№{num})"
             get_chat_settings(target_cid)
             cursor.execute("UPDATE chat_settings SET welcome_text = '', welcome_enabled = 0 WHERE chat_id = ?", (target_cid,))
