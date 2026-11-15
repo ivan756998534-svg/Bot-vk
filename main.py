@@ -1,4 +1,4 @@
-import sqlite3
+эimport sqlite3
 import re
 import time
 import asyncio
@@ -335,16 +335,47 @@ def get_target(m: Message, args: list):
 
 def get_tail(m: Message, args: list, start: int = 2):
     return " ".join(args[1:]) if m.reply_message else " ".join(args[start:])
-from curl_cffi import requests as cffi_requests
+import asyncio
+import subprocess
+from playwright.sync_api import sync_playwright
+
+try:
+    subprocess.run(["playwright", "install", "chromium"], check=False)
+except Exception:
+    pass
+
 def fetch_forum_topics_sync(rss_url: str):
-    resp = cffi_requests.get(
-        f"{FORUM_HOST}/hgantiddos/src.js?v=62",
-        impersonate="chrome120",
-        timeout=15
-    )
-    print("=== JS ЗАЩИТЫ ===", flush=True)
-    print(resp.text[:3500], flush=True)
-    raise ValueError(resp.text[:800])
+    page_url = rss_url.replace("/index.rss", "/")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        page = context.new_page()
+        page.goto(page_url, wait_until="domcontentloaded", timeout=25000)
+        page.wait_for_timeout(5000)
+        
+        html_content = page.content()
+        browser.close()
+
+    if "antiddos" in html_content.lower() and "structItem-title" not in html_content:
+        raise ValueError("Защита не пройдена за 5 секунд")
+
+    topics = []
+    blocks = re.findall(r'<div class="structItem-title"[^>]*>(.*?)</div>', html_content, re.S)
+    for b in blocks:
+        link_m = re.search(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', b, re.S)
+        if link_m:
+            href = link_m.group(1).strip()
+            raw_title = re.sub(r"<[^>]+>", "", link_m.group(2)).strip()
+            t_title = html.unescape(raw_title)
+            t_link = href if href.startswith("http") else f"{FORUM_HOST}{href}"
+            if t_title and "/threads/" in t_link:
+                topics.append((t_link, t_title, t_link, "Игрок"))
+
+    if not topics:
+        raise ValueError("Темы не найдены на странице раздела")
+    return topics
     
 async def background_tasks_loop():
     while True:
