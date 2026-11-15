@@ -1,2 +1,2 @@
 vkbottle
-cloudscraper
+pip install curl_cffi
