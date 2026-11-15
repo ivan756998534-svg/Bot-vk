@@ -1,2 +1,2 @@
 vkbottle
-pip install curl_cffi
+curl_cffi
