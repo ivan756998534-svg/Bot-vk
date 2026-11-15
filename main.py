@@ -344,22 +344,37 @@ try:
 except Exception:
     pass
 
+import threading
+_browser_lock = threading.Lock()
+
 def fetch_forum_topics_sync(rss_url: str):
     page_url = rss_url.replace("/index.rss", "/")
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
-        page = context.new_page()
-        page.goto(page_url, wait_until="domcontentloaded", timeout=25000)
-        page.wait_for_timeout(5000)
-        
-        html_content = page.content()
-        browser.close()
+    with _browser_lock:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--no-zygote",
+                    "--single-process"
+                ]
+            )
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+            page = context.new_page()
+            page.route("**/*.{png,jpg,jpeg,gif,webp,css,woff,woff2,svg}", lambda route: route.abort())
+            
+            page.goto(page_url, wait_until="commit", timeout=40000)
+            page.wait_for_timeout(6000)
+            
+            html_content = page.content()
+            browser.close()
 
     if "antiddos" in html_content.lower() and "structItem-title" not in html_content:
-        raise ValueError("Защита не пройдена за 5 секунд")
+        raise ValueError("Защита антиддоса не пропустила браузер. Нужен белый список IP у ГА.")
 
     topics = []
     blocks = re.findall(r'<div class="structItem-title"[^>]*>(.*?)</div>', html_content, re.S)
@@ -372,6 +387,10 @@ def fetch_forum_topics_sync(rss_url: str):
             t_link = href if href.startswith("http") else f"{FORUM_HOST}{href}"
             if t_title and "/threads/" in t_link:
                 topics.append((t_link, t_title, t_link, "Игрок"))
+
+    if not topics:
+        raise ValueError("Темы не найдены (возможно, раздел закрыт от гостей)")
+    return topics
 
     if not topics:
         raise ValueError("Темы не найдены на странице раздела")
