@@ -336,43 +336,17 @@ def get_target(m: Message, args: list):
 def get_tail(m: Message, args: list, start: int = 2):
     return " ".join(args[1:]) if m.reply_message else " ".join(args[start:])
 from curl_cffi import requests as cffi_requests
-
 def fetch_forum_topics_sync(rss_url: str):
-    headers = {
-        "Cookie": FORUM_COOKIE_HEADER,
-        "Accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
-        "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": f"{FORUM_HOST}/"
-    }
     resp = cffi_requests.get(
         rss_url,
-        headers=headers,
+        headers={"Cookie": FORUM_COOKIE_HEADER},
         impersonate="chrome120",
         timeout=15
     )
-    resp.raise_for_status()
-    xml_bytes = resp.content
-
-    text_preview = xml_bytes[:400].decode("utf-8", errors="ignore").lower()
-    if "<html" in text_preview and "<rss" not in text_preview:
-        snippet = re.sub(r"<[^>]+>", " ", text_preview).strip()[:120]
-        raise ValueError(f"Форум вернул HTML вместо RSS. Ответ: {snippet}")
-
-    root = ET.fromstring(xml_bytes)
-    topics = []
-    for item in root.findall(".//item"):
-        title_el = item.find("title")
-        link_el = item.find("link")
-        guid_el = item.find("guid")
-        creator_el = item.find(DC_CREATOR_TAG)
-        if title_el is not None and link_el is not None:
-            t_title = html.unescape((title_el.text or "").strip())
-            t_link = (link_el.text or "").strip()
-            t_guid = (guid_el.text or t_link).strip() if guid_el is not None else t_link
-            t_author = (creator_el.text or "Неизвестен").strip() if creator_el is not None else "Неизвестен"
-            if t_title and t_link:
-                topics.append((t_guid, t_title, t_link, t_author))
-    return topics
+    print("=== HTML ЗАЩИТЫ НАЧАЛО ===")
+    print(resp.text)
+    print("=== HTML ЗАЩИТЫ КОНЕЦ ===")
+    raise ValueError("Код защиты выведен в логи хостинга")
     
 async def background_tasks_loop():
     while True:
