@@ -335,43 +335,38 @@ def get_target(m: Message, args: list):
 
 def get_tail(m: Message, args: list, start: int = 2):
     return " ".join(args[1:]) if m.reply_message else " ".join(args[start:])
-import asyncio
-import subprocess
-from playwright.sync_api import sync_playwright
-
-try:
-    subprocess.run(["playwright", "install", "chromium"], check=False)
-except Exception:
-    pass
-
-import threading
-_browser_lock = threading.Lock()
+from curl_cffi import requests as cffi_requests
 
 def fetch_forum_topics_sync(rss_url: str):
     page_url = rss_url.replace("/index.rss", "/")
-    with _browser_lock:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--no-zygote",
-                    "--single-process"
-                ]
-            )
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-            page = context.new_page()
-            page.route("**/*.{png,jpg,jpeg,gif,webp,css,woff,woff2,svg}", lambda route: route.abort())
-            
-            page.goto(page_url, wait_until="commit", timeout=40000)
-            page.wait_for_timeout(6000)
-            
-            html_content = page.content()
-            browser.close()
+    headers = {
+        "Cookie": FORUM_COOKIE_HEADER,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    resp = cffi_requests.get(page_url, headers=headers, impersonate="chrome120", timeout=10)
+    resp.raise_for_status()
+    html_content = resp.text
+
+    if "antiddos" in html_content.lower() and "structItem-title" not in html_content:
+        raise ValueError("Антиддос хостинга блокирует IP. Попросите ГА добавить IP 82.147.67.225 в белый список.")
+
+    topics = []
+    blocks = re.findall(r'<div class="structItem-title"[^>]*>(.*?)</div>', html_content, re.S)
+    for b in blocks:
+        link_m = re.search(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', b, re.S)
+        if link_m:
+            href = link_m.group(1).strip()
+            raw_title = re.sub(r"<[^>]+>", "", link_m.group(2)).strip()
+            t_title = html.unescape(raw_title)
+            t_link = href if href.startswith("http") else f"{FORUM_HOST}{href}"
+            if t_title and "/threads/" in t_link:
+                topics.append((t_link, t_title, t_link, "Игрок"))
+
+    if not topics:
+        raise ValueError("Темы не найдены")
+    return topics
+
 
     if "antiddos" in html_content.lower() and "structItem-title" not in html_content:
         raise ValueError("Защита антиддоса не пропустила браузер. Нужен белый список IP у ГА.")
