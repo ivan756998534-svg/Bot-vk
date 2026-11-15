@@ -1,4 +1,4 @@
-эimport sqlite3
+import sqlite3
 import re
 import time
 import asyncio
