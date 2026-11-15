@@ -11,7 +11,7 @@ from datetime import datetime
 from vkbottle.bot import Bot, Message
 from vkbottle import DocMessagesUploader
 
-TOKEN = ""vk1.a.wRLD9d0-BY9Oqv4RDMCwnxYHuUInwhyuU1xrgBaNFS_N4cUr0AYRPN9bMFg9Sp8Ft77yW4rrJ8edIjFWFLc7bHWLBnaznu2yaZnRegXulkesm9ylnZEF7XKZic-CCHUwWZ6HerFlnx8-ipesHpqQc0a4GVuOrS3NHBfz-5wzfWEpMnPzFvc2YL2gXV4RasXEFiVO0U5GZJw-RTAKIe_aEA
+TOKEN = "vk1.a.wRLD9d0-BY9Oqv4RDMCwnxYHuUInwhyuU1xrgBaNFS_N4cUr0AYRPN9bMFg9Sp8Ft77yW4rrJ8edIjFWFLc7bHWLBnaznu2yaZnRegXulkesm9ylnZEF7XKZic-CCHUwWZ6HerFlnx8-ipesHpqQc0a4GVuOrS3NHBfz-5wzfWEpMnPzFvc2YL2gXV4RasXEFiVO0U5GZJw-RTAKIe_aEA
 OWNER_ID = 807140123
 
 bot = Bot(token=TOKEN)
