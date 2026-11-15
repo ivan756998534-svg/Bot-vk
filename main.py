@@ -338,15 +338,14 @@ def get_tail(m: Message, args: list, start: int = 2):
 from curl_cffi import requests as cffi_requests
 def fetch_forum_topics_sync(rss_url: str):
     resp = cffi_requests.get(
-        rss_url,
-        headers={"Cookie": FORUM_COOKIE_HEADER},
+        f"{FORUM_HOST}/hgantiddos/src.js?v=62",
         impersonate="chrome120",
         timeout=15
     )
-    print("=== HTML ЗАЩИТЫ НАЧАЛО ===")
-    print(resp.text)
-    print("=== HTML ЗАЩИТЫ КОНЕЦ ===")
-    raise ValueError("Код защиты выведен в логи хостинга")
+    print("=== JS ЗАЩИТЫ НАЧАЛО ===")
+    print(resp.text[:3500])
+    print("=== JS ЗАЩИТЫ КОНЕЦ ===")
+    raise ValueError("JS сохранен в логи")
     
 async def background_tasks_loop():
     while True:
