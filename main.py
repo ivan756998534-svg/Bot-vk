@@ -342,10 +342,9 @@ def fetch_forum_topics_sync(rss_url: str):
         impersonate="chrome120",
         timeout=15
     )
-    print("=== JS ЗАЩИТЫ НАЧАЛО ===")
-    print(resp.text[:3500])
-    print("=== JS ЗАЩИТЫ КОНЕЦ ===")
-    raise ValueError("JS сохранен в логи")
+    print("=== JS ЗАЩИТЫ ===", flush=True)
+    print(resp.text[:3500], flush=True)
+    raise ValueError(resp.text[:800])
     
 async def background_tasks_loop():
     while True:
