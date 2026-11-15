@@ -335,19 +335,28 @@ def get_target(m: Message, args: list):
 
 def get_tail(m: Message, args: list, start: int = 2):
     return " ".join(args[1:]) if m.reply_message else " ".join(args[start:])
-import cloudscraper
+from curl_cffi import requests as cffi_requests
 
 def fetch_forum_topics_sync(rss_url: str):
-    scraper = cloudscraper.create_scraper(
-        browser={"browser": "chrome", "platform": "windows", "desktop": True}
+    headers = {
+        "Cookie": FORUM_COOKIE_HEADER,
+        "Accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
+        "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": f"{FORUM_HOST}/"
+    }
+    resp = cffi_requests.get(
+        rss_url,
+        headers=headers,
+        impersonate="chrome120",
+        timeout=15
     )
-    resp = scraper.get(rss_url, headers={"Cookie": FORUM_COOKIE_HEADER}, timeout=15)
     resp.raise_for_status()
     xml_bytes = resp.content
 
     text_preview = xml_bytes[:400].decode("utf-8", errors="ignore").lower()
     if "<html" in text_preview and "<rss" not in text_preview:
-        raise ValueError("Форум вернул HTML вместо RSS (проверь куки или защиту)")
+        snippet = re.sub(r"<[^>]+>", " ", text_preview).strip()[:120]
+        raise ValueError(f"Форум вернул HTML вместо RSS. Ответ: {snippet}")
 
     root = ET.fromstring(xml_bytes)
     topics = []
@@ -364,7 +373,7 @@ def fetch_forum_topics_sync(rss_url: str):
             if t_title and t_link:
                 topics.append((t_guid, t_title, t_link, t_author))
     return topics
-
+    
 async def background_tasks_loop():
     while True:
         await asyncio.sleep(45)
