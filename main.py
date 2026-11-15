@@ -1414,7 +1414,7 @@ async def handler(m: Message):
                 return await m.answer("❌ Команда доступна только владельцу бота.")
             conn.commit()
             try:
-                doc = await doc_uploader.upload(file_source="rp_manager_network.db", peer_id=OWNER_ID, title=f"backup_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.db")
+                doc = await doc_uploader.upload(file_source="rp_manager_network.db", peer_id=cid, title=f"backup_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.db")
                 await bot.api.messages.send(peer_id=OWNER_ID, message="💾 Резервная копия базы данных успешно создана!", attachment=doc, random_id=0)
                 return await m.answer("✅ Файл базы данных отправлен вам в личные сообщения.")
             except Exception as e:
