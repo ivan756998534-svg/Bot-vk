@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import re
 import time
@@ -11,8 +12,19 @@ from datetime import datetime
 from vkbottle.bot import Bot, Message
 from vkbottle import DocMessagesUploader
 
-TOKEN = "vk1.a.wRLD9d0-BY9Oqv4RDMCwnxYHuUInwhyuU1xrgBaNFS_N4cUr0AYRPN9bMFg9Sp8Ft77yW4rrJ8edIjFWFLc7bHWLBnaznu2yaZnRegXulkesm9ylnZEF7XKZic-CCHUwWZ6HerFlnx8-ipesHpqQc0a4GVuOrS3NHBfz-5wzfWEpMnPzFvc2YL2gXV4RasXEFiVO0U5GZJw-RTAKIe_aEA"
-OWNER_ID = 807140123
+# --- Секреты вынесены в переменные окружения ---
+# Задайте их перед запуском, например:
+#   export VK_BOT_TOKEN="..."
+#   export VK_OWNER_ID="807140123"
+#   export FORUM_COOKIE="xf_csrf=...;xf_user=...;xf_session=..."
+# Если переменная окружения не задана — используется значение по умолчанию ниже
+# (так бот продолжит работать без дополнительной настройки, но хранить токены
+# и куки прямо в коде небезопасно, особенно если файл может куда-то утечь).
+TOKEN = os.environ.get(
+    "VK_BOT_TOKEN",
+    "vk1.a.wRLD9d0-BY9Oqv4RDMCwnxYHuUInwhyuU1xrgBaNFS_N4cUr0AYRPN9bMFg9Sp8Ft77yW4rrJ8edIjFWFLc7bHWLBnaznu2yaZnRegXulkesm9ylnZEF7XKZic-CCHUwWZ6HerFlnx8-ipesHpqQc0a4GVuOrS3NHBfz-5wzfWEpMnPzFvc2YL2gXV4RasXEFiVO0U5GZJw-RTAKIe_aEA"
+)
+OWNER_ID = int(os.environ.get("VK_OWNER_ID", "807140123"))
 
 bot = Bot(token=TOKEN)
 doc_uploader = DocMessagesUploader(bot.api)
@@ -35,8 +47,21 @@ FORUM_SECTIONS = [
 ]
 DC_CREATOR_TAG = "{http://purl.org/dc/elements/1.1/}creator"
 
-FORUM_COOKIE_HEADER = "xf_csrf=8L5En5h0cHTXUf5V;xf_user=39%2C_ZASys6PaEnhpoSAoKi2KSJOiXuejXR7RYco7qCk;xf_session=wDyAao8QtezHzoF4HfJgAq0e9y2ZI9Zt"
+FORUM_COOKIE_HEADER = os.environ.get(
+    "FORUM_COOKIE",
+    "xf_csrf=8L5En5h0cHTXUf5V;xf_user=39%2C_ZASys6PaEnhpoSAoKi2KSJOiXuejXR7RYco7qCk;xf_session=wDyAao8QtezHzoF4HfJgAq0e9y2ZI9Zt"
+)
 forum_watcher_started = False
+
+# --- Состояние бэкоффа мониторинга форума (антиддос/недоступность) ---
+# Если форум недоступен (например, антиддос хостинга ещё не пропустил IP),
+# не долбим его каждые 45 секунд бесконечно — увеличиваем паузу между
+# попытками, пока запрос не станет успешным.
+FORUM_BACKOFF_STEPS = [45, 90, 180, 360, 600, 900]  # секунды
+forum_fail_count = 0
+forum_next_attempt_ts = 0
+forum_last_ok_ts = 0
+forum_last_error = ""
 cursor.execute("CREATE TABLE IF NOT EXISTS known_chats (chat_id INTEGER PRIMARY KEY, title TEXT DEFAULT 'Беседа проекта')")
 cursor.execute("CREATE TABLE IF NOT EXISTS chat_requests (chat_id INTEGER PRIMARY KEY, requester_id INTEGER, title TEXT, created_at INTEGER)")
 cursor.execute("CREATE TABLE IF NOT EXISTS global_staff (user_id INTEGER PRIMARY KEY, role_name TEXT DEFAULT 'Участник', access INTEGER DEFAULT 0)")
@@ -118,6 +143,8 @@ HELP_DICT.update({
     "чранг": "🎯 +чмодер / +чадмин / +чга / +чзга / +чспец / +чснять [@игрок] [№ чатов]\nВыдаёт или снимает должность в конкретных беседах из списка «+чаты».",
     "форумчат": "⚖️ +форумчат / -форумчат\nПодключает или отключает отправку новых жалоб и обжалований с форума.",
     "тестфорум": "🔍 +тестфорум\nПроверяет подключение бота к RSS-лентам форума.",
+    "форумстатус": "📶 +форумстатус\nПоказывает, доступен ли сейчас форум, сколько неудачных попыток подряд и когда следующая попытка (бэкофф).",
+    "сеть": "🌐 +сеть\nОбщая сводка по всей сети: число бесед, игроков в базе, глобал-банов, состава и состояние мониторинга форума (4+ ур.).",
     "мут": "🔇 +мут [@игрок] [срок] [причина]\nПримеры: +мут @durov 30м Флуд | +мут @durov 2ч Спам",
     "пред": "⚠️ +пред [@игрок] [причина]\nВыдаёт устное предупреждение (2 преда = 1 выговор).",
     "выг": "📛 +выг [@игрок] [причина]\nВыдаёт строгий выговор (3 выговора = автокик).",
@@ -143,9 +170,15 @@ def ui_box(title: str, lines: list, footer: str = "") -> str:
         else:
             clean_lines.append(f"🔹 {formatted}")
     body = "\n".join(clean_lines)
-    res = f"【 {to_bold(title)} 】\n\n{body}"
+    # Компактный формат: одна разделительная линия под заголовком (не грузит
+    # экран на телефоне) и короткая строка времени в конце — одинаково хорошо
+    # читается и в узком окне на телефоне, и в широком на ПК, т.к. не зависит
+    # от переносов по словам внутри body.
+    res = f"【 {to_bold(title)} 】\n┄┄┄┄┄┄┄┄┄┄\n{body}"
+    tail = f"🕐 {datetime.now().strftime('%H:%M')}"
     if footer:
-        res += f"\n\n┄┄┄┄┄┄┄┄┄┄┄┄\n💡 {footer}"
+        tail = f"💡 {footer}\n{tail}"
+    res += f"\n\n{tail}"
     return res
 def parse_duration(token: str):
     m = re.match(r"^(\d+)([мчдmhd]?)$", token.lower())
@@ -367,31 +400,8 @@ def fetch_forum_topics_sync(rss_url: str):
         raise ValueError("Темы не найдены")
     return topics
 
-
-    if "antiddos" in html_content.lower() and "structItem-title" not in html_content:
-        raise ValueError("Защита антиддоса не пропустила браузер. Нужен белый список IP у ГА.")
-
-    topics = []
-    blocks = re.findall(r'<div class="structItem-title"[^>]*>(.*?)</div>', html_content, re.S)
-    for b in blocks:
-        link_m = re.search(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', b, re.S)
-        if link_m:
-            href = link_m.group(1).strip()
-            raw_title = re.sub(r"<[^>]+>", "", link_m.group(2)).strip()
-            t_title = html.unescape(raw_title)
-            t_link = href if href.startswith("http") else f"{FORUM_HOST}{href}"
-            if t_title and "/threads/" in t_link:
-                topics.append((t_link, t_title, t_link, "Игрок"))
-
-    if not topics:
-        raise ValueError("Темы не найдены (возможно, раздел закрыт от гостей)")
-    return topics
-
-    if not topics:
-        raise ValueError("Темы не найдены на странице раздела")
-    return topics
-    
 async def background_tasks_loop():
+    global forum_fail_count, forum_next_attempt_ts, forum_last_ok_ts, forum_last_error
     while True:
         await asyncio.sleep(45)
         now_ts = int(time.time())
@@ -433,7 +443,7 @@ async def background_tasks_loop():
             cursor.execute("SELECT value FROM bot_config WHERE key = 'forum_chat'")
             fc_row = cursor.fetchone()
             forum_cid = first(fc_row) if fc_row else ""
-            if forum_cid:
+            if forum_cid and now_ts >= forum_next_attempt_ts:
                 cursor.execute("SELECT value FROM bot_config WHERE key = 'forum_seen'")
                 seen_row = cursor.fetchone()
                 seen_raw = first(seen_row) if seen_row else ""
@@ -441,11 +451,14 @@ async def background_tasks_loop():
                 is_first_init = len(seen_list) == 0
                 seen_set = set(seen_list)
                 updated_seen = False
+                had_error = False
 
                 for sec_name, rss_url in FORUM_SECTIONS:
                     try:
                         topics = await asyncio.to_thread(fetch_forum_topics_sync, rss_url)
-                    except Exception:
+                    except Exception as e:
+                        had_error = True
+                        forum_last_error = f"{sec_name}: {e}"
                         continue
                     if not topics:
                         continue
@@ -477,6 +490,26 @@ async def background_tasks_loop():
                 if updated_seen:
                     cursor.execute("INSERT OR REPLACE INTO bot_config VALUES ('forum_seen', ?)", ("||".join(seen_list[-120:]),))
                     conn.commit()
+
+                # --- Бэкофф и логирование доступности форума ---
+                if had_error:
+                    old_step = min(forum_fail_count - 1, len(FORUM_BACKOFF_STEPS) - 1) if forum_fail_count else -1
+                    forum_fail_count += 1
+                    step = min(forum_fail_count - 1, len(FORUM_BACKOFF_STEPS) - 1)
+                    delay = FORUM_BACKOFF_STEPS[step]
+                    forum_next_attempt_ts = now_ts + delay
+                    if step != old_step:
+                        await send_log(
+                            f"⚠️ Форум недоступен (попытка {forum_fail_count}): {forum_last_error}\n"
+                            f"Следующая попытка через {delay} сек."
+                        )
+                else:
+                    if forum_fail_count > 0:
+                        await send_log(f"✅ Мониторинг форума восстановлен (было {forum_fail_count} неудачных попыток подряд).")
+                    forum_fail_count = 0
+                    forum_next_attempt_ts = 0
+                    forum_last_ok_ts = now_ts
+                    forum_last_error = ""
         except Exception:
             pass
 @bot.on.chat_message()
@@ -801,7 +834,8 @@ async def handler(m: Message):
                     "🎯 По № чатов: +чмодер, +чадмин, +чга, +чзга, +чспец, +чснять [@игрок] [№...]",
                     "🎖️ Назначение: +спец / +гспец [@игрок]",
                     "🌐 Сеть бесед: +старт, +одобрить, +чаты, -чат [№], +заявки",
-                    "⚖️ Форум: +форумчат / -форумчат / +тестфорум",
+                    "⚖️ Форум: +форумчат / -форумчат / +тестфорум / +форумстатус",
+                    "🌐 Сеть: +сеть / +гсостав / +списокчатов",
                     "📜 Логи и ЧС: +логчат, -логчат, +чсбота, -чсбота",
                     "📣 Оповещение: +рассылка [текст] — во все чаты сети",
                     "💾 Владелец: +бэкап — скачать базу данных в ЛС"
@@ -993,6 +1027,37 @@ async def handler(m: Message):
             return await m.answer("📭 Администрация чата не назначена.")
         st.sort(key=lambda x: first(x), reverse=True)
         await m.answer(ui_box("🛡️ СОСТАВ ЧАТА", [line for _, line in st]))
+    elif cmd == "+сеть":
+        if acc < 4:
+            return await m.answer("❌ Нужен 4+ ур.")
+        cursor.execute("SELECT COUNT(*) FROM known_chats")
+        (net_chats,) = cursor.fetchone()
+        cursor.execute("SELECT COUNT(DISTINCT user_id) FROM users")
+        (net_users,) = cursor.fetchone()
+        cursor.execute("SELECT COUNT(*) FROM global_bans")
+        (net_gbans,) = cursor.fetchone()
+        cursor.execute("SELECT COUNT(*) FROM global_staff WHERE access >= 1")
+        (net_staff,) = cursor.fetchone()
+        cursor.execute("SELECT COUNT(*) FROM chat_requests")
+        (net_pending,) = cursor.fetchone()
+        up_min = int(time.time() - START_TIME) // 60
+        up_label = f"{up_min // 1440} дн. {(up_min % 1440) // 60} ч." if up_min >= 1440 else f"{up_min // 60} ч. {up_min % 60} мин."
+        cursor.execute("SELECT value FROM bot_config WHERE key = 'forum_chat'")
+        fc_row_net = cursor.fetchone()
+        forum_state = "Выключен ❌"
+        if fc_row_net:
+            forum_state = "Доступен ✅" if forum_fail_count == 0 else f"Недоступен ❌ ({forum_fail_count} сбоев)"
+        await m.answer(ui_box(
+            "🌐 СОСТОЯНИЕ СЕТИ ПРОЕКТА",
+            [
+                f"Бесед подключено: {net_chats} | Заявок в ожидании: {net_pending}",
+                f"Игроков в базе: {net_users} | Глобал-банов: {net_gbans}",
+                f"Глобальный состав: {net_staff} чел.",
+                f"Мониторинг форума: {forum_state}",
+                f"Аптайм бота: {up_label}"
+            ],
+            "+форумстатус — подробности по форуму | +гсостав — список состава"
+        ))
     elif cmd in ["+чекбан", "+банчек", "/checkban"]:
         if acc < 1:
             return await m.answer("❌ Нужен 1+ ур.")
@@ -1408,7 +1473,7 @@ async def handler(m: Message):
                     f"Автоочистка: {'Вкл' if aclean_sys else 'Выкл'} | Антислив: Вкл"
                 ]
             ))
-    elif cmd in ["+приветствие", "+приветствие_режим", "-приветствие", "+устправила", "+устссылки", "+сбросстатистики", "+чсбота", "-чсбота", "+логчат", "-логчат", "+форумчат", "-форумчат", "+тестфорум", "+рассылка", "+бэкап"]:
+    elif cmd in ["+приветствие", "+приветствие_режим", "-приветствие", "+устправила", "+устссылки", "+сбросстатистики", "+чсбота", "-чсбота", "+логчат", "-логчат", "+форумчат", "-форумчат", "+тестфорум", "+форумстатус", "+рассылка", "+бэкап"]:
         if cmd == "+бэкап":
             if m.from_id != OWNER_ID:
                 return await m.answer("❌ Команда доступна только владельцу бота.")
@@ -1420,7 +1485,7 @@ async def handler(m: Message):
             except Exception as e:
                 return await m.answer(f"⚠️ Не удалось отправить бэкап (напишите боту в ЛС сначала). Ошибка: {e}")
 
-        req = 4 if cmd in ["+чсбота", "-чсбота", "+логчат", "-логчат", "+форумчат", "-форумчат", "+тестфорум", "+рассылка"] else 3
+        req = 4 if cmd in ["+чсбота", "-чсбота", "+логчат", "-логчат", "+форумчат", "-форумчат", "+тестфорум", "+форумстатус", "+рассылка"] else 3
         if acc < req:
             return await m.answer(f"❌ Нужен {req}+ ур.")
 
@@ -1492,6 +1557,27 @@ async def handler(m: Message):
                 except Exception as e:
                     report.append(f"❌ {sec_name}: {e}")
             return await m.answer(ui_box("🔍 ДИАГНОСТИКА ФОРУМА", report))
+
+        if cmd == "+форумстатус":
+            now_ts_fs = int(time.time())
+            cursor.execute("SELECT value FROM bot_config WHERE key = 'forum_chat'")
+            fc_row_fs = cursor.fetchone()
+            forum_cid_fs = first(fc_row_fs) if fc_row_fs else ""
+            lines_fs = [f"Мониторинг: {'Включен ✅' if forum_cid_fs else 'Выключен ❌'}"]
+            if forum_cid_fs:
+                lines_fs.append(f"Чат уведомлений: {forum_cid_fs}")
+                if forum_fail_count == 0:
+                    if forum_last_ok_ts:
+                        lines_fs.append("Состояние: Доступен ✅")
+                        lines_fs.append(f"Последняя успешная проверка: {max(0, now_ts_fs - forum_last_ok_ts)} сек. назад")
+                    else:
+                        lines_fs.append("Состояние: Ещё не проверялся")
+                else:
+                    wait_left = max(0, forum_next_attempt_ts - now_ts_fs)
+                    lines_fs.append(f"Состояние: Недоступен ❌ (подряд неудач: {forum_fail_count})")
+                    lines_fs.append(f"Последняя ошибка: {forum_last_error}")
+                    lines_fs.append(f"Следующая попытка через: ~{wait_left} сек.")
+            return await m.answer(ui_box("📶 СТАТУС МОНИТОРИНГА ФОРУМА", lines_fs))
 
         if cmd in ["+чсбота", "-чсбота"]:
             tid = get_target(m, args)
