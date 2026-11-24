@@ -142,6 +142,36 @@ MENU_LABELS = {
     "✖ Закрыть меню": "close",
 }
 
+
+def normalize_menu_text(value: str) -> str:
+    """Нормализует подписи VK-кнопок: VK может менять emoji/упоминания."""
+    value = (value or "").strip().casefold()
+    # Иногда VK возвращает упоминание сообщества перед текстом кнопки.
+    value = re.sub(r"^@?(?:club|public|event)\d+\s*", "", value)
+    value = re.sub(r"\[(?:club|public|event)\d+\|([^]]+)\]", r"\1", value)
+    # Вариационные селекторы и zero-width символы отличаются на Android/VK.
+    value = value.replace("\ufe0f", "").replace("\u200d", "").replace("\u200b", "")
+    # Для сопоставления оставляем только буквы/цифры и пробелы — emoji не важны.
+    value = "".join(ch if (ch.isalnum() or ch.isspace()) else " " for ch in value)
+    return " ".join(value.split())
+
+
+MENU_LABELS_NORMALIZED = {
+    normalize_menu_text(label): page for label, page in MENU_LABELS.items()
+}
+# Запасные варианты без emoji — на случай, если клиент VK отправит только текст.
+MENU_LABELS_NORMALIZED.update({
+    "игроки": "players",
+    "модерация": "moderation",
+    "администрирование": "admin",
+    "руководство": "leaders",
+    "спец раздел": "special",
+    "специальный раздел": "special",
+    "справка": "help",
+    "главное меню": "main",
+    "закрыть меню": "close",
+})
+
 def make_menu_keyboard(access: int, page: str = "main"):
     kb = Keyboard(one_time=False)
     if page == "main":
@@ -221,7 +251,12 @@ async def show_menu(peer_id: int, access: int, page: str = "main"):
 
     sent_id = await bot.api.messages.send(
         peer_id=peer_id,
-        message=ui_box(title, lines, "Для перехода используй кнопки; предыдущее меню будет удалено."),
+        message=ui_box(
+            title,
+            lines,
+            "Нажми «↩ Главное меню» для возврата. Чтобы выполнить команду из списка, отправь её в чат отдельным сообщением."
+            if page != "main" else "Нажми кнопку нужного раздела. Предыдущее меню будет удалено при переходе."
+        ),
         keyboard=make_menu_keyboard(access, page).get_json(),
         random_id=0
     )
@@ -713,7 +748,8 @@ async def handler(m: Message):
         return await m.answer("❌ Заявка на объединение этой беседы отклонена.")
 
 
-    menu_label = MENU_LABELS.get(text_raw)
+    normalized_menu_text = normalize_menu_text(text_raw)
+    menu_label = MENU_LABELS_NORMALIZED.get(normalized_menu_text)
     menu_command = text_raw.lower() in {"+меню", "/menu", "меню"}
     if menu_label or menu_command:
         if not is_chat_active(cid):
