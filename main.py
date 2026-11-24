@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 import html
 from datetime import datetime
 from vkbottle.bot import Bot, Message
-from vkbottle import DocMessagesUploader
+from vkbottle import DocMessagesUploader, Keyboard, Text
 
 # --- Секреты вынесены в переменные окружения ---
 # Задайте их перед запуском, например:
@@ -20,10 +20,9 @@ from vkbottle import DocMessagesUploader
 # Если переменная окружения не задана — используется значение по умолчанию ниже
 # (так бот продолжит работать без дополнительной настройки, но хранить токены
 # и куки прямо в коде небезопасно, особенно если файл может куда-то утечь).
-TOKEN = os.environ.get(
-    "VK_BOT_TOKEN",
-    "vk1.a.wRLD9d0-BY9Oqv4RDMCwnxYHuUInwhyuU1xrgBaNFS_N4cUr0AYRPN9bMFg9Sp8Ft77yW4rrJ8edIjFWFLc7bHWLBnaznu2yaZnRegXulkesm9ylnZEF7XKZic-CCHUwWZ6HerFlnx8-ipesHpqQc0a4GVuOrS3NHBfz-5wzfWEpMnPzFvc2YL2gXV4RasXEFiVO0U5GZJw-RTAKIe_aEA"
-)
+TOKEN = os.environ.get("VK_BOT_TOKEN", 'vk1.a.wRLD9d0-BY9Oqv4RDMCwnxYHuUInwhyuU1xrgBaNFS_N4cUr0AYRPN9bMFg9Sp8Ft77yW4rrJ8edIjFWFLc7bHWLBnaznu2yaZnRegXulkesm9ylnZEF7XKZic-CCHUwWZ6HerFlnx8-ipesHpqQc0a4GVuOrS3NHBfz-5wzfWEpMnPzFvc2YL2gXV4RasXEFiVO0U5GZJw-RTAKIe_aEA').strip()
+if not TOKEN:
+    raise RuntimeError("Не задан VK_BOT_TOKEN. Укажите токен в переменной окружения.")
 OWNER_ID = int(os.environ.get("VK_OWNER_ID", "807140123"))
 
 bot = Bot(token=TOKEN)
@@ -47,10 +46,7 @@ FORUM_SECTIONS = [
 ]
 DC_CREATOR_TAG = "{http://purl.org/dc/elements/1.1/}creator"
 
-FORUM_COOKIE_HEADER = os.environ.get(
-    "FORUM_COOKIE",
-    "xf_csrf=8L5En5h0cHTXUf5V;xf_user=39%2C_ZASys6PaEnhpoSAoKi2KSJOiXuejXR7RYco7qCk;xf_session=wDyAao8QtezHzoF4HfJgAq0e9y2ZI9Zt"
-)
+FORUM_COOKIE_HEADER = os.environ.get("FORUM_COOKIE", "").strip()
 forum_watcher_started = False
 
 # --- Состояние бэкоффа мониторинга форума (антиддос/недоступность) ---
@@ -129,7 +125,112 @@ BOLD_MAP = str.maketrans(
 
 def to_bold(text: str) -> str:
     return text.translate(BOLD_MAP)
+
+# --- Интерактивное меню ---
+# Кнопки отправляют короткие текстовые команды; при переходе предыдущее
+# сообщение меню удаляется. Это совместимо с обычными клавиатурами VK.
+last_menu_message = {}
+
+MENU_LABELS = {
+    "👤 Игроки": "players",
+    "🛡️ Модерация": "moderation",
+    "⚖️ Администрирование": "admin",
+    "👑 Руководство": "leaders",
+    "⚜️ Спец. раздел": "special",
+    "❔ Справка": "help",
+    "↩ Главное меню": "main",
+    "✖ Закрыть меню": "close",
+}
+
+def make_menu_keyboard(access: int, page: str = "main"):
+    kb = Keyboard(one_time=False)
+    if page == "main":
+        kb.add(Text("👤 Игроки")).add(Text("❔ Справка")).row()
+        if access >= 1:
+            kb.add(Text("🛡️ Модерация"))
+        if access >= 2:
+            kb.add(Text("⚖️ Администрирование"))
+        if access >= 3:
+            kb.row().add(Text("👑 Руководство"))
+        if access >= 4:
+            kb.add(Text("⚜️ Спец. раздел"))
+    else:
+        kb.add(Text("↩ Главное меню")).add(Text("✖ Закрыть меню"))
+    return kb
+
+MENU_PAGES = {
+    "players": (
+        "👤 РАЗДЕЛ ИГРОКОВ",
+        ["+стата [@игрок] — профиль", "+топ — активные участники",
+         "+реп / -реп [@игрок] — репутация", "+ники / +состав — списки",
+         "+онлайн — кто в сети", "+правила и +ссылки — информация"]
+    ),
+    "moderation": (
+        "🛡️ МОДЕРАЦИЯ",
+        ["+ник [@игрок] [ник] — игровой ник", "+мут [@игрок] [время] [причина]",
+         "+пред [@игрок] [причина] — предупреждение",
+         "+заметка [@игрок] [текст] — запись в досье",
+         "+заметки [@игрок] — просмотр досье", "+чекбан [@игрок] — проверка ограничений"]
+    ),
+    "admin": (
+        "⚖️ АДМИНИСТРИРОВАНИЕ",
+        ["+выг [@игрок] [причина] — выговор", "+бан [@игрок] [срок] [причина]",
+         "+срок [@игрок] [дни] — срок должности", "+сроки — список сроков",
+         "+тишина / +антикапс / +антифлуд — переключатели",
+         "+антиссылка / +автоочистка — настройки чата"]
+    ),
+    "leaders": (
+        "👑 РУКОВОДСТВО",
+        ["+гник [@игрок] [ник] — глобальный ник", "+гбан [@игрок] [срок] [причина]",
+         "+гсостав — глобальный состав", "+снятьвсе [@игрок] — сброс наказаний",
+         "+устправила [текст] — изменить правила",
+         "+устссылки [текст] — изменить ссылки"]
+    ),
+    "special": (
+        "⚜️ СПЕЦИАЛЬНЫЙ РАЗДЕЛ",
+        ["+сеть — статистика сети", "+чаты — список бесед",
+         "+заявки — заявки на подключение", "+форумчат / -форумчат — мониторинг",
+         "+форумстатус / +тестфорум — диагностика",
+         "+рассылка [текст] — объявление по сети", "+бэкап — копия базы данных"]
+    ),
+    "help": (
+        "❔ СПРАВКА",
+        ["Выберите раздел кнопками меню.",
+         "+помощь — команды, доступные вашей должности.",
+         "+помощь [команда] — подробности конкретной команды.",
+         "+пинг — состояние и время работы бота."]
+    ),
+}
+
+async def show_menu(peer_id: int, access: int, page: str = "main"):
+    old_id = last_menu_message.get(peer_id)
+    if old_id:
+        try:
+            await bot.api.messages.delete(
+                peer_id=peer_id, message_ids=[old_id], delete_for_all=True
+            )
+        except Exception:
+            pass
+
+    if page == "main":
+        title = "🎛️ ПАНЕЛЬ УПРАВЛЕНИЯ"
+        lines = ["Выбери нужный раздел кнопками ниже.",
+                 "Доступные разделы зависят от твоей должности."]
+    else:
+        title, lines = MENU_PAGES.get(page, MENU_PAGES["help"])
+
+    sent_id = await bot.api.messages.send(
+        peer_id=peer_id,
+        message=ui_box(title, lines, "Для перехода используй кнопки; предыдущее меню будет удалено."),
+        keyboard=make_menu_keyboard(access, page).get_json(),
+        random_id=0
+    )
+    if isinstance(sent_id, int):
+        last_menu_message[peer_id] = sent_id
+
+
 HELP_DICT = {
+    "меню": "🎛️ +меню — открыть интерактивную панель с кнопками. Старое меню удаляется при переходе.",
     "старт": "🚀 +старт (или /start)\nАктивирует бота в беседе (для создателя чата или 4–5 ранга).",
     "стата": "💎 +стата [@игрок]\nПрофиль игрока: ник, должность, срок, актив и наказания.",
     "ссылки": "🌐 +ссылки (или +форум)\nПоказывает важные ссылки проекта. Изменить: +устссылки [текст]",
@@ -317,7 +418,7 @@ async def check_anti_sliv(cid: int, chat_id: int, actor_id: int) -> bool:
     acts.append(now)
     admin_actions_log[(cid, actor_id)] = acts
     if len(acts) >= 4:
-        cursor.execute("UPDATE users SET access = 0, role_name = 'Участник' WHERE user_id = ?", (actor_id,))
+        cursor.execute("UPDATE users SET access = 0, role_name = 'Участник' WHERE chat_id = ? AND user_id = ?", (cid, actor_id))
         cursor.execute("DELETE FROM global_staff WHERE user_id = ?", (actor_id,))
         cursor.execute("INSERT OR REPLACE INTO local_bans VALUES (?, ?, ?, ?)", (cid, actor_id, "Автозащита: подозрение на слив админки", 0))
         conn.commit()
@@ -611,6 +712,30 @@ async def handler(m: Message):
         conn.commit()
         return await m.answer("❌ Заявка на объединение этой беседы отклонена.")
 
+
+    menu_label = MENU_LABELS.get(text_raw)
+    menu_command = text_raw.lower() in {"+меню", "/menu", "меню"}
+    if menu_label or menu_command:
+        if not is_chat_active(cid):
+            return await m.answer("Сначала подключи беседу командой +заявка.")
+        _, _, menu_access, _, _, _, _, _, _ = get_user(cid, m.from_id)
+        if menu_label == "close":
+            old_id = last_menu_message.pop(cid, None)
+            if old_id:
+                try:
+                    await bot.api.messages.delete(
+                        peer_id=cid, message_ids=[old_id], delete_for_all=True
+                    )
+                except Exception:
+                    pass
+            return await m.answer("✖ Меню закрыто.")
+        page = "main" if menu_command or menu_label in (None, "main") else menu_label
+        needed = {"moderation": 1, "admin": 2, "leaders": 3, "special": 4}
+        if page in needed and menu_access < needed[page]:
+            return await m.answer("❌ Этот раздел недоступен для вашей должности.")
+        await show_menu(cid, menu_access, page)
+        return
+
     if not is_chat_active(cid):
         if m.action and m.action.type.value == "chat_invite_user" and m.action.member_id and m.action.member_id < 0:
             ok = await auto_assign_owner(cid)
@@ -841,7 +966,8 @@ async def handler(m: Message):
                     "💾 Владелец: +бэкап — скачать базу данных в ЛС"
                 ]
             ))
-        menu_lines = ["👤 +помощь игрок — профиль, ссылки, списки"]
+        menu_lines = ["🎛️ +меню — открыть интерактивное меню с кнопками",
+        "👤 +помощь игрок — профиль, ссылки, списки"]
         if acc >= 1:
             menu_lines.append("🛡️ +помощь модер — ники, муты, преды, досье")
         if acc >= 2:
